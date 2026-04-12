@@ -20,25 +20,29 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const joinUrl = process.argv[2];
-const outputFile = process.argv[3];
-const isHeadless = process.env.HEADLESS !== "false"; // По умолчанию в Docker используем headless
+const isCreateMode = joinUrl === '--create';
+const outputFile = isCreateMode ? null : process.argv[3];
+const isHeadless = process.env.HEADLESS !== "false";
 
-if (!joinUrl || !outputFile) {
-  console.error("Использование: node recorder.js <join_url> <output_file>");
+if (!joinUrl || (!isCreateMode && !outputFile)) {
+  console.error("Использование: node recorder.js <join_url> <output_file> ИЛИ node recorder.js --create");
   process.exit(1);
 }
 
-const outputPath = resolve(outputFile);
-const outputDir = dirname(outputPath);
-if (!existsSync(outputDir)) {
+let outputPath;
+if (!isCreateMode) {
+  outputPath = resolve(outputFile);
+  const outputDir = dirname(outputPath);
+  if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
+  }
+  // Очистка старого файла
+  writeFileSync(outputPath, "");
+  console.log(`[recorder] join_url: ${joinUrl}`);
+  console.log(`[recorder] output:   ${outputPath}`);
+} else {
+  console.log(`[recorder] Режим создания новой встречи активен.`);
 }
-
-console.log(`[recorder] join_url: ${joinUrl}`);
-console.log(`[recorder] output:   ${outputPath}`);
-
-// Очистка старого файла
-writeFileSync(outputPath, "");
 
 const BOT_NAME = process.env.BOT_DISPLAY_NAME || "Telemost Recorder";
 
@@ -134,6 +138,26 @@ await page.evaluateOnNewDocument(() => {
 
 // ПЕРЕХОД ПО ССЫЛКЕ
 try {
+    if (isCreateMode) {
+      await page.goto("https://telemost.yandex.ru/", { waitUntil: "networkidle2" });
+      console.log("[recorder] Зашли на главную для создания встречи...");
+      
+      // Ищем кнопку "Создать встречу" (анализ показал селектор CreateCallButton)
+      const buttonSelector = 'button[class*="CreateCallButton"]';
+      await page.waitForSelector(buttonSelector, { timeout: 10000 });
+      await page.click(buttonSelector);
+
+      console.log("[recorder] Ожидание генерации ссылки...");
+      await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 });
+      const newUrl = page.url();
+      console.log(`[SUCCESS_JOIN_URL] ${newUrl}`);
+      
+      // Для режима только создания - завершаем работу. 
+      // Но если мы хотим продолжить запись, мы не делаем exit.
+      // В нашем случае run_start.sh ждет возврата ссылки и потом запускает другой процесс.
+      process.exit(0);
+    }
+
     await page.goto(joinUrl, { waitUntil: "networkidle2", timeout: 45000 });
     console.log("[recorder] Страница загружена");
     // --- МОНИТОР ПРИСУТСТВИЯ И ТАЙМ-АУТЫ ---
@@ -158,27 +182,26 @@ try {
         // 2. Проверка количества участников
         try {
             const count = await page.evaluate(() => {
-                // Ищем кнопку участников. Обычно там есть число.
-                // Пытаемся найти элементы, которые могут содержать количество участников
-                const potentialElements = [
-                    ...document.querySelectorAll('[class*="Participants"]'),
-                    ...document.querySelectorAll('[class*="participants"]'),
-                    ...document.querySelectorAll('[class*="Count"]'),
-                    ...document.querySelectorAll('[title*="Участники"]'),
-                    ...document.querySelectorAll('[aria-label*="Участники"]')
-                ];
+                // Ищем конкретно кнопку участников с иконкой человечков
+                // В Телемосте это часто кнопка с aria-label или текстом "Участники"
+                const participantBtn = document.querySelector('[data-testid="participants-button"]');
+                if (participantBtn) {
+                     const match = participantBtn.innerText.match(/(\d+)/);
+                     if (match) return parseInt(match[1]);
+                }
 
-                for (const el of potentialElements) {
-                    const text = el.innerText || el.textContent || "";
-                    const match = text.match(/(\d+)/);
+                // Альтернативный поиск по селекторам Яндекса
+                const countEls = document.querySelectorAll('[class*="ParticipantsCount"]');
+                for (const el of countEls) {
+                    const match = el.innerText.match(/(\d+)/);
                     if (match) return parseInt(match[1]);
                 }
 
-                // Если не нашли на кнопках, ищем в списке (если открыт)
+                // Если не нашли на кнопках, считаем список
                 const participantList = document.querySelectorAll('[class*="Participant-Name"], [class*="ParticipantItem"]');
                 if (participantList.length > 0) return participantList.length;
 
-                return 2; // По умолчанию считаем, что мы не одни, чтобы не выйти раньше времени при ошибке
+                return 1; // Если совсем ничего не нашли, считаем что мы одни (безопасный выход)
             });
 
             console.log(`[monitor] Участников: ${count} | Прошло: ${Math.floor(totalSeconds/60)}м`);
@@ -228,8 +251,8 @@ try {
 }
 
 // 2. Ищем поле ввода имени
+console.log("[recorder] Ищем поле для ввода имени...");
 const nameInput = await page.evaluateHandle(() => {
-    // Ищем инпут внутри контейнера, который следует за текстом "Ваше имя на встрече"
     const labels = [...document.querySelectorAll('div, span, p')];
     const nameLabel = labels.find(el => el.textContent.includes('Ваше имя на встрече'));
     if (nameLabel && nameLabel.parentElement) {
@@ -240,28 +263,26 @@ const nameInput = await page.evaluateHandle(() => {
 
 if (nameInput && nameInput.asElement()) {
     const el = nameInput.asElement();
-    
     await page.evaluate((input, name) => {
-        // Хак для обхода React/Vue сеттеров
         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
         nativeInputValueSetter.call(input, name);
-
-        // Уведомляем систему, что значение изменилось
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         input.dispatchEvent(new Event('blur', { bubbles: true }));
     }, el, BOT_NAME);
     
-    console.log(`[recorder] Установлено имя через JS-инъекцию: ${BOT_NAME}`);
-    await new Promise(r => setTimeout(r, 500)); // Даем Яндексу время "переварить" имя
+    console.log(`[recorder] Имя "${BOT_NAME}" установлено.`);
+    await new Promise(r => setTimeout(r, 1000));
+} else {
+    console.log("[recorder] Поле имени не найдено, возможно бот уже вошел или селектор изменился.");
 }
 
-// 3. ПОПЫТКА ЗАКРЫТЬ СИСТЕМНОЕ ОКНО (Escape)
+// 3. ПОПЫТКА ЗАКРЫТЬ СИСТЕМНОЕ ОКНО
 await page.keyboard.press('Escape');
-console.log("[recorder] Отправлен Escape для закрытия системного окна");
 await new Promise(r => setTimeout(r, 2000));
 
-// Выключаем мик и камеру перед входом
+// Выключаем мик и камеру
+console.log("[recorder] Выключаем микрофон и камеру...");
 await page.evaluate(() => {
     const micBtn = document.querySelector('[data-testid="turn-off-mic-button"]');
     if (micBtn) micBtn.click();
@@ -269,15 +290,16 @@ await page.evaluate(() => {
     if (camBtn) camBtn.click();
 });
 
-// Кнопка "Присоединиться" или "Подключиться"
+// Кнопка "Присоединиться"
+console.log("[recorder] Ищем кнопку входа...");
 const joinButton = await page.evaluateHandle(() => {
   const buttons = [...document.querySelectorAll("button, [role='button']")];
   return buttons.find((b) => /подключиться|присоединиться|join/i.test(b.textContent));
 });
 
 if (joinButton && joinButton.asElement()) {
-    await page.evaluate((el) => el.click(), joinButton); // Принудительный клик через JS
-    console.log("[recorder] Нажата кнопка входа (JS)");
+    await page.evaluate((el) => el.click(), joinButton);
+    console.log("[recorder] Кнопка входа нажата! Входим на встречу...");
 }
 
 console.log("[recorder] Запись активна. Ожидание...");

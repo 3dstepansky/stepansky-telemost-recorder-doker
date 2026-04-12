@@ -32,6 +32,18 @@ const summaryFile = join(outputDir, "summary.md");
 async function main() {
     console.log(`=== НАЧАЛО СЕССИИ: ${timestamp} ===`);
     
+    let isShuttingDown = false;
+
+    const handleShutdown = async (signal) => {
+        if (isShuttingDown) return;
+        isShuttingDown = true;
+        console.log(`\n[system] Получен сигнал ${signal}. Начинаем изящное завершение...`);
+        recorder.kill("SIGINT");
+    };
+
+    process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+    process.on("SIGINT", () => handleShutdown("SIGINT"));
+    
     // 1. ЗАПУСК ЗАПИСИ
     console.log("[step 1] Запуск процесса записи...");
     const recorder = spawn("node", ["recorder.js", joinUrl, audioFile], {
@@ -117,10 +129,30 @@ async function main() {
                 console.log("[step 4] Выгрузка в S3 завершена.");
             }
             
-            console.log("=== ВСЕ ЗАДАЧИ ВЫПОЛНЕНЫ УСПЕШНО ===");
+            const result = {
+                file: audioFile,
+                title: process.env.MEETING_TITLE || 'Telemost Recording',
+                chat_id: process.env.TELEGRAM_CHAT_ID,
+                duration_sec: Math.round((Date.now() - startTime) / 1000),
+                started_at: new Date(startTime).toISOString()
+            };
 
+            console.log("---JSON_START---");
+            console.log(JSON.stringify(result));
+            console.log("---JSON_END---");
+
+            if (process.env.N8N_WEBHOOK_URL) {
+                try {
+                    await axios.post(process.env.N8N_WEBHOOK_URL, result);
+                } catch (e) {
+                    // Silently fail if n8n is down
+                }
+            }
+
+            process.exit(0);
         } catch (error) {
-            console.error("[error] Ошибка на этапе обработки:", error.message);
+            console.error(JSON.stringify({ error: error.message }));
+            process.exit(1);
         }
     });
 

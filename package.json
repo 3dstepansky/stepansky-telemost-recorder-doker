@@ -1,15 +1,17 @@
 {
   "name": "stepansky-telemost",
-  "version": "0.002",
+  "version": "0.003",
   "private": true,
   "type": "module",
   "description": "Zero Cost Yandex.Telemost Recorder (Guest Mode)",
   "main": "run.js",
   "scripts": {
     "start": "node run.js",
-    "record": "node recorder.js"
+    "record": "node recorder.js",
+    "transcribe": "node transcribe.js"
   },
   "dependencies": {
+    "axios": "^1.6.7",
     "puppeteer": "^24.0.0",
     "dotenv": "^16.4.5",
     "mkdirp": "^3.0.1",
