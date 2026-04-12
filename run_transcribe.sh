@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# Аргументы: $1 - Путь к файлу, $2 - Заголовок
+# Аргументы из n8n: $1 - Путь, $2 - Заголовок, $3 - Chat ID
 FILE_PATH=$1
 TITLE=$2
+CHAT_ID=$3
 
 if [ ! -f "$FILE_PATH" ]; then
   echo "{\"error\":\"Файл $FILE_PATH не найден\"}"
   exit 1
 fi
 
-# Вызываем Node.js скрипт транскрибации (ZeroPay Whisper)
+# Вызываем Node.js скрипт транскрибации
 # Он возвращает JSON, который n8n распарсит в Parse Transcript
-node transcribe.js "$FILE_PATH" "$TITLE"
+node transcribe.js "$FILE_PATH" "$TITLE" "$CHAT_ID"

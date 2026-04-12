@@ -1,24 +1,20 @@
 #!/bin/bash
 
-# Остановка контейнера сигналом SIGINT, чтобы Node.js успел выполнить финализацию (FFmpeg, сигналы n8n)
-CONTAINER_NAME="telemost_recorder"
+# Аргументы: $1 - Chat ID
+CHAT_ID=$1
+CONTAINER_NAME="telemost_$CHAT_ID"
 
-if docker ps | grep -q "$CONTAINER_NAME"; then
-  # Получаем метаданные из логов перед остановкой (последний JSON_START)
-  METADATA=$(docker logs "$CONTAINER_NAME" 2>&1 | grep -A 5 "---JSON_START---" | tail -n 6)
-  
+if [ -z "$CHAT_ID" ]; then
+  echo '{"error":"Chat ID не указан"}'
+  exit 1
+fi
+
+if docker ps -a --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+  # Посылаем SIGTERM для корректного завершения (run.js поймает его и отправит вебхук)
   docker stop -t 10 "$CONTAINER_NAME" > /dev/null
   docker rm "$CONTAINER_NAME" > /dev/null
-  
-  # Очищаем метаданные от маркеров
-  JSON=$(echo "$METADATA" | sed 's/---JSON_START---//' | sed 's/---JSON_END---//')
-  
-  if [ -z "$JSON" ]; then
-    echo '{"status":"stopped", "message":"Запись остановлена, но метаданные не получены"}'
-  else
-    echo "$JSON"
-  fi
+  echo "{\"status\":\"stopped\", \"chat_id\":\"$CHAT_ID\", \"container\":\"$CONTAINER_NAME\"}"
 else
-  echo '{"error":"Нет активной записи"}'
+  echo "{\"error\":\"Запись для чата $CHAT_ID не найдена\"}"
   exit 1
 fi

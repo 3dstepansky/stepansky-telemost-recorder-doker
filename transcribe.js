@@ -2,6 +2,7 @@ import { transcribe } from './services/ai.js';
 
 const filePath = process.argv[2];
 const title = process.argv[3] || 'Без названия';
+const chatId = process.argv[4] || 'unknown';
 
 if (!filePath) {
   console.log(JSON.stringify({ error: "Путь к файлу не передан" }));
@@ -15,6 +16,7 @@ async function run() {
     // Формируем JSON ответ для n8n
     console.log(JSON.stringify({
       title: title,
+      chat_id: chatId,
       file_path: filePath,
       transcript: result.text,
       utterances: result.utterances,

@@ -1,15 +1,9 @@
-/**
- * run.js — Главный оркестратор Zero Cost Телемост-Рекордера.
- * Управляет процессом записи, транскрибации и суммаризации.
- */
-
 import { spawn } from "child_process";
 import { resolve, join } from "path";
-import { writeFileSync, existsSync, mkdirSync } from "fs";
-import { transcribeAudio } from "./services/transcribe.js";
-import { summarizeTranscript } from "./services/summarize.js";
+import { existsSync, mkdirSync } from "fs";
 import { uploadToS3 } from "./services/s3.js";
 import dotenv from "dotenv";
+import axios from "axios";
 
 dotenv.config();
 
@@ -19,6 +13,7 @@ if (!joinUrl) {
     process.exit(1);
 }
 
+const HOST_ROOT_PATH = "/opt/telemost-recorder";
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 const outputDir = resolve("./recordings", timestamp);
 if (!existsSync(outputDir)) {
@@ -26,26 +21,40 @@ if (!existsSync(outputDir)) {
 }
 
 const audioFile = join(outputDir, "meeting_audio.webm");
-const transcriptFile = join(outputDir, "transcript.json");
-const summaryFile = join(outputDir, "summary.md");
 
 async function main() {
     console.log(`=== НАЧАЛО СЕССИИ: ${timestamp} ===`);
-    
+    const startTime = Date.now();
     let isShuttingDown = false;
 
     const handleShutdown = async (signal) => {
         if (isShuttingDown) return;
         isShuttingDown = true;
-        console.log(`\n[system] Получен сигнал ${signal}. Начинаем изящное завершение...`);
+        console.log(`\n[system] Получен сигнал ${signal}. Завершаем запись...`);
+        
+        if (process.env.N8N_WEBHOOK_URL) {
+            // Маппинг пути Docker -> Host
+            const hostFilePath = audioFile.replace("/app", HOST_ROOT_PATH);
+            
+            try {
+                await axios.post(process.env.N8N_WEBHOOK_URL, {
+                    file: hostFilePath,
+                    title: process.env.MEETING_TITLE || `Telemost ${timestamp}`,
+                    chat_id: process.env.CHAT_ID || 'manual_launch'
+                });
+                console.log("[system] Вебхук успешно отправлен в n8n.");
+            } catch (e) {
+                console.error("[error] Ошибка вебхука:", e.message);
+            }
+        }
+        
         recorder.kill("SIGINT");
     };
 
     process.on("SIGTERM", () => handleShutdown("SIGTERM"));
     process.on("SIGINT", () => handleShutdown("SIGINT"));
     
-    // 1. ЗАПУСК ЗАПИСИ
-    console.log("[step 1] Запуск процесса записи...");
+    console.log("[step 1] Запуск рекордера...");
     const recorder = spawn("node", ["recorder.js", joinUrl, audioFile], {
         stdio: "inherit",
         env: { 
@@ -56,110 +65,15 @@ async function main() {
     });
 
     recorder.on("close", async (code) => {
-        console.log(`[step 1] Процесс записи завершен с кодом: ${code}`);
-        
-        if (!existsSync(audioFile)) {
-            console.error("[error] Аудиофайл не был создан.");
-            return;
+        if (process.env.S3_BUCKET && existsSync(audioFile)) {
+            console.log("[step 4] Выгрузка в S3...");
+            try {
+                await uploadToS3(audioFile, process.env.S3_BUCKET, `audio/${timestamp}_meeting.webm`);
+            } catch (e) {
+                console.error("[error] S3 upload failed:", e.message);
+            }
         }
-
-        try {
-            // 1.5 ОБРАБОТКА АУДИО (VAD + Splitting)
-            console.log("[step 1.5] Обработка аудио: удаление тишины и нарезка...");
-            const cleanAudio = join(outputDir, "audio_clean.webm");
-            
-            // Удаление тишины
-            const vadTask = spawn("ffmpeg", [
-                "-i", audioFile,
-                "-af", "silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-30dB",
-                cleanAudio
-            ]);
-            await new Promise(r => vadTask.on("close", r));
-            console.log("[step 1.5] Тишина удалена.");
-
-            // Нарезка на чанки по 20 минут
-            const chunkPattern = join(outputDir, "chunk_%03d.webm");
-            const splitTask = spawn("ffmpeg", [
-                "-i", cleanAudio,
-                "-f", "segment",
-                "-segment_time", "1200", // 20 минут
-                "-c", "copy",
-                chunkPattern
-            ]);
-            await new Promise(r => splitTask.on("close", r));
-            console.log("[step 1.5] Аудио нарезано на части по 20 минут.");
-
-            // Собираем список чанков
-            const chunks = [];
-            let i = 0;
-            while (true) {
-                const chunkPath = join(outputDir, `chunk_${String(i).padStart(3, '0')}.webm`);
-                if (existsSync(chunkPath)) {
-                    chunks.push(chunkPath);
-                    i++;
-                } else {
-                    break;
-                }
-            }
-
-            // 2. ТРАНСКРИБАЦИЯ
-            console.log("[step 2] Начинаем расшифровку аудио (пакетная обработка)...");
-            const transcript = await transcribeAudio(chunks.length > 0 ? chunks : [audioFile]);
-            writeFileSync(transcriptFile, JSON.stringify(transcript, null, 2));
-            console.log(`[step 2] Текст сохранен в: ${transcriptFile}`);
-
-            // 3. СУММАРИЗАЦИЯ
-            console.log("[step 3] Генерация итогов встречи (Summary)...");
-            const summary = await summarizeTranscript(transcript.text);
-            
-            const finalReport = `# Итоги встречи от ${new Date().toLocaleString()}\n\n` +
-                                `URL встречи: ${joinUrl}\n\n` +
-                                `## Саммари\n${summary}\n\n` +
-                                `--- \n*Записано и обработано автоматически через stepansky-telemost Core*`;
-
-            writeFileSync(summaryFile, finalReport);
-            console.log(`[step 3] Финальный отчет готов: ${summaryFile}`);
-
-            // 4. ВЫГРУЗКА В S3 (Milestone 3)
-            if (process.env.S3_BUCKET) {
-                console.log("[step 4] Начинаем выгрузку в S3...");
-                await uploadToS3(summaryFile, process.env.S3_BUCKET, `reports/${timestamp}_summary.md`);
-                // Опционально: выгрузка тяжелого аудио
-                // await uploadToS3(audioFile, process.env.S3_BUCKET, `audio/${timestamp}_meeting.webm`);
-                console.log("[step 4] Выгрузка в S3 завершена.");
-            }
-            
-            const result = {
-                file: audioFile,
-                title: process.env.MEETING_TITLE || 'Telemost Recording',
-                chat_id: process.env.TELEGRAM_CHAT_ID,
-                duration_sec: Math.round((Date.now() - startTime) / 1000),
-                started_at: new Date(startTime).toISOString()
-            };
-
-            console.log("---JSON_START---");
-            console.log(JSON.stringify(result));
-            console.log("---JSON_END---");
-
-            if (process.env.N8N_WEBHOOK_URL) {
-                try {
-                    await axios.post(process.env.N8N_WEBHOOK_URL, result);
-                } catch (e) {
-                    // Silently fail if n8n is down
-                }
-            }
-
-            process.exit(0);
-        } catch (error) {
-            console.error(JSON.stringify({ error: error.message }));
-            process.exit(1);
-        }
-    });
-
-    // Обработка прерывания (Ctrl+C)
-    process.on("SIGINT", () => {
-        console.log("\n[system] Получен сигнал прерывания. Останавливаем рекордер...");
-        recorder.kill();
+        process.exit(0);
     });
 }
 
