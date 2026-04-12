@@ -1,0 +1,10 @@
+services:
+  recorder:
+    build: .
+    container_name: telemost-recorder
+    volumes:
+      - ./recordings:/app/recordings
+    env_file:
+      - .env
+    # Для запуска через n8n или консоль:
+    # docker-compose run --rm recorder "https://telemost.yandex.ru/j/..."
