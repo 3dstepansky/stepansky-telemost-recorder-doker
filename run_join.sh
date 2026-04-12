@@ -16,15 +16,18 @@ CONTAINER_NAME="telemost_$CHAT_ID"
 docker stop "$CONTAINER_NAME" 2>/dev/null
 docker rm "$CONTAINER_NAME" 2>/dev/null
 
-# Запуск контейнера. 
-# Пробрасываем CHAT_ID и монтируем папку с записями
-# Используем --network="host" для доступа к локальному n8n (если нужно)
+# Настройки вебхука и путей
+WEBHOOK_URL="${N8N_WEBHOOK_URL:-https://stepan8nsky.casacam.net/webhook/telemost-recording-finished}"
+HOST_PATH="${HOST_RECORDINGS_DIR:-/opt/telemost-recorder/recordings}"
+
+# Запуск контейнера
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   -e CHAT_ID="$CHAT_ID" \
-  -v /opt/telemost-recorder/recordings:/app/recordings \
+  -e N8N_WEBHOOK_URL="$WEBHOOK_URL" \
+  -v "$HOST_PATH":/app/recordings \
   --network="host" \
-  telemost-recorder-recorder node run.js "$JOIN_URL"
+  stepansky-telemost-recorder:latest node run.js "$JOIN_URL"
 
 echo "{\"status\":\"started\", \"chat_id\":\"$CHAT_ID\", \"container\":\"$CONTAINER_NAME\"}"

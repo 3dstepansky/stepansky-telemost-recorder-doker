@@ -138,204 +138,149 @@ await page.evaluateOnNewDocument(() => {
 
 // ПЕРЕХОД ПО ССЫЛКЕ
 try {
-    if (isCreateMode) {
-      await page.goto("https://telemost.yandex.ru/", { waitUntil: "networkidle2" });
-      console.log("[recorder] Зашли на главную для создания встречи...");
-      
-      // Ищем кнопку "Создать встречу" (анализ показал селектор CreateCallButton)
-      const buttonSelector = 'button[class*="CreateCallButton"]';
-      await page.waitForSelector(buttonSelector, { timeout: 10000 });
-      await page.click(buttonSelector);
+  // --- ПЕРЕХОД ПО ССЫЛКЕ ---
+  if (isCreateMode) {
+    await page.goto("https://telemost.yandex.ru/", { waitUntil: "networkidle2" });
+    console.log("[recorder] Зашли на главную для создания встречи...");
+    
+    // Ищем кнопку "Создать встречу"
+    const buttonSelector = 'button[class*="CreateCallButton"]';
+    await page.waitForSelector(buttonSelector, { timeout: 10000 });
+    await page.click(buttonSelector);
 
-      console.log("[recorder] Ожидание генерации ссылки...");
-      await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 });
-      const newUrl = page.url();
-      console.log(`[SUCCESS_JOIN_URL] ${newUrl}`);
-      
-      // Для режима только создания - завершаем работу. 
-      // Но если мы хотим продолжить запись, мы не делаем exit.
-      // В нашем случае run_start.sh ждет возврата ссылки и потом запускает другой процесс.
-      process.exit(0);
-    }
+    console.log("[recorder] Ожидание генерации ссылки...");
+    await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 });
+    const newUrl = page.url();
+    console.log(`[SUCCESS_JOIN_URL] ${newUrl}`);
+    await browser.close();
+    process.exit(0);
+  }
 
-    await page.goto(joinUrl, { waitUntil: "networkidle2", timeout: 45000 });
-    console.log("[recorder] Страница загружена");
-    // --- МОНИТОР ПРИСУТСТВИЯ И ТАЙМ-АУТЫ ---
-    const MAX_IDLE_MINS = parseInt(process.env.MAX_IDLE_MINS || "3");
-    const MAX_DURATION_MINS = parseInt(process.env.MAX_DURATION_MINS || "180");
-    let idleSeconds = 0;
-    let totalSeconds = 0;
-
-    console.log(`[monitor] Лимиты: Ожидание ${MAX_IDLE_MINS}м, Макс. запись ${MAX_DURATION_MINS}м`);
-
-    const monitorInterval = setInterval(async () => {
-        totalSeconds += 10;
-        
-        // 1. Проверка общего времени (Hard Timeout)
-        if (totalSeconds >= MAX_DURATION_MINS * 60) {
-            console.log(`[monitor] Достигнут лимит времени записи (${MAX_DURATION_MINS} мин). Завершаю...`);
-            clearInterval(monitorInterval);
-            await gracefulShutdown();
-            return;
-        }
-
-        // 2. Проверка количества участников
-        try {
-            const count = await page.evaluate(() => {
-                // Ищем конкретно кнопку участников с иконкой человечков
-                // В Телемосте это часто кнопка с aria-label или текстом "Участники"
-                const participantBtn = document.querySelector('[data-testid="participants-button"]');
-                if (participantBtn) {
-                     const match = participantBtn.innerText.match(/(\d+)/);
-                     if (match) return parseInt(match[1]);
-                }
-
-                // Альтернативный поиск по селекторам Яндекса
-                const countEls = document.querySelectorAll('[class*="ParticipantsCount"]');
-                for (const el of countEls) {
-                    const match = el.innerText.match(/(\d+)/);
-                    if (match) return parseInt(match[1]);
-                }
-
-                // Если не нашли на кнопках, считаем список
-                const participantList = document.querySelectorAll('[class*="Participant-Name"], [class*="ParticipantItem"]');
-                if (participantList.length > 0) return participantList.length;
-
-                return 1; // Если совсем ничего не нашли, считаем что мы одни (безопасный выход)
-            });
-
-            console.log(`[monitor] Участников: ${count} | Прошло: ${Math.floor(totalSeconds/60)}м`);
-
-            if (count <= 1) {
-                idleSeconds += 10;
-                const remaining = (MAX_IDLE_MINS * 60) - idleSeconds;
-                if (idleSeconds % 30 === 0) {
-                    console.log(`[monitor] Бот один в комнате. Выход через ${Math.floor(remaining)} сек...`);
-                }
-            } else {
-                idleSeconds = 0;
-            }
-
-            if (idleSeconds >= MAX_IDLE_MINS * 60) {
-                console.log(`[monitor] Бот был один слишком долго (${MAX_IDLE_MINS} мин). Завершаю сессию.`);
-                clearInterval(monitorInterval);
-                await gracefulShutdown();
-            }
-        } catch (e) {
-            console.error("[monitor] Ошибка при проверке участников:", e.message);
-        }
-    }, 10000); // Проверка каждые 10 секунд
-
-} catch (error) {
-    console.error("[error] Критическая ошибка рекордера:", error);
-    process.exit(1);
-}
-
-// ЛОГИКА ВХОДА ГАСТЕМ
-await new Promise(r => setTimeout(r, 8000)); // Даем время на редиректы
-
-// 1. ПРОВЕРКА КНОПКИ "ПРОДОЛЖИТЬ В БРАУЗЕРЕ"
-try {
-    const continueInBrowser = await page.evaluateHandle(() => {
-        const buttons = [...document.querySelectorAll("button, [role='button'], a")];
-        return buttons.find((b) => /продолжить в браузере|continue in browser/i.test(b.textContent));
+  // ОБРАБОТКА СИГНАЛОВ (для предотвращения зомби)
+  const signals = ["SIGINT", "SIGTERM"];
+  signals.forEach((signal) => {
+    process.on(signal, async () => {
+      console.log(`[system] Получен сигнал ${signal}. Начинаем экстренное сохранение...`);
+      await gracefulShutdown();
     });
+  });
 
-    if (continueInBrowser && continueInBrowser.asElement()) {
-        await page.evaluate((el) => el.click(), continueInBrowser); // Принудительный клик через JS
-        console.log("[recorder] Нажато (JS): Продолжить в браузере");
-        await new Promise(r => setTimeout(r, 5000));
+  await page.goto(joinUrl, { waitUntil: "networkidle2", timeout: 45000 });
+  console.log("[recorder] Страница загружена");
+
+  // ЛОГИКА ВХОДА (улучшенная)
+  await new Promise(r => setTimeout(r, 8000));
+
+  // 1. ПРОВЕРКА КНОПКИ "ПРОДОЛЖИТЬ В БРАУЗЕРЕ"
+  try {
+    const continueBtn = await page.evaluateHandle(() => {
+      const buttons = [...document.querySelectorAll("button, [role='button'], a")];
+      return buttons.find((b) => /продолжить в браузере|continue in browser/i.test(b.textContent));
+    });
+    if (continueBtn && continueBtn.asElement()) {
+      await page.evaluate((el) => el.click(), continueBtn);
+      console.log("[recorder] Нажато: Продолжить в браузере");
+      await new Promise(r => setTimeout(r, 5000));
     }
-} catch (e) {
-    console.log("[recorder] Кнопка 'Продолжить в браузере' не найдена или не требуется");
-}
+  } catch (e) {}
 
-// 2. Ищем поле ввода имени
-console.log("[recorder] Ищем поле для ввода имени...");
-const nameInput = await page.evaluateHandle(() => {
+  // 2. Ищем поле ввода имени
+  const nameInput = await page.evaluateHandle(() => {
     const labels = [...document.querySelectorAll('div, span, p')];
     const nameLabel = labels.find(el => el.textContent.includes('Ваше имя на встрече'));
     if (nameLabel && nameLabel.parentElement) {
-        return nameLabel.parentElement.querySelector('input, [contenteditable="true"]');
+      return nameLabel.parentElement.querySelector('input, [contenteditable="true"]');
     }
     return document.querySelector('input[placeholder*="имя"], .name-input input');
-});
+  });
 
-if (nameInput && nameInput.asElement()) {
-    const el = nameInput.asElement();
+  if (nameInput && nameInput.asElement()) {
     await page.evaluate((input, name) => {
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-        nativeInputValueSetter.call(input, name);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        input.dispatchEvent(new Event('blur', { bubbles: true }));
-    }, el, BOT_NAME);
-    
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      nativeSetter.call(input, name);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, nameInput.asElement(), BOT_NAME);
     console.log(`[recorder] Имя "${BOT_NAME}" установлено.`);
     await new Promise(r => setTimeout(r, 1000));
-} else {
-    console.log("[recorder] Поле имени не найдено, возможно бот уже вошел или селектор изменился.");
+  }
+
+  // 3. Выключаем мик и камеру перед входом
+  await page.evaluate(() => {
+    const mic = document.querySelector('[data-testid="turn-off-mic-button"]');
+    if (mic) mic.click();
+    const cam = document.querySelector('[data-testid="turn-off-camera-button"]');
+    if (cam) cam.click();
+  });
+
+  // 4. Кнопка "Присоединиться"
+  const joinBtn = await page.evaluateHandle(() => {
+    const buttons = [...document.querySelectorAll("button, [role='button']")];
+    return buttons.find((b) => /подключиться|присоединиться|join/i.test(b.textContent));
+  });
+
+  if (joinBtn && joinBtn.asElement()) {
+    await page.evaluate((el) => el.click(), joinBtn);
+    console.log("[recorder] Кнопка входа нажата!");
+  }
+
+  // --- МОНИТОР ПРИСУТСТВИЯ ---
+  const MAX_IDLE_MINS = parseInt(process.env.MAX_IDLE_MINS || "3");
+  const MAX_DURATION_MINS = parseInt(process.env.MAX_DURATION_MINS || "180");
+  let idleSeconds = 0;
+  let totalSeconds = 0;
+
+  console.log(`[monitor] Лимиты: Ожидание ${MAX_IDLE_MINS}м, Макс. запись ${MAX_DURATION_MINS}м`);
+
+  while (totalSeconds < MAX_DURATION_MINS * 60) {
+    await new Promise(r => setTimeout(r, 10000));
+    totalSeconds += 10;
+
+    try {
+      const count = await page.evaluate(() => {
+          const btn = document.querySelector('[data-testid="participants-button"]');
+          if (btn) {
+              const m = btn.innerText.match(/(\d+)/);
+              if (m) return parseInt(m[1]);
+          }
+          return document.querySelectorAll('[class*="ParticipantItem"]').length || 1;
+      });
+
+      if (count <= 1) {
+          idleSeconds += 10;
+          if (idleSeconds >= MAX_IDLE_MINS * 60) {
+              console.log("[monitor] Бот один в комнате слишком долго. Выходим.");
+              break;
+          }
+      } else {
+          idleSeconds = 0;
+      }
+    } catch (e) {
+      console.error("[monitor] Ошибка проверки участников:", e.message);
+    }
+  }
+
+  await gracefulShutdown();
+
+} catch (error) {
+  console.error("[error] Критическая ошибка рекордера:", error.message);
+} finally {
+  console.log("[system] Финальное закрытие браузера...");
+  if (browser) await browser.close();
+  process.exit(0);
 }
 
-// 3. ПОПЫТКА ЗАКРЫТЬ СИСТЕМНОЕ ОКНО
-await page.keyboard.press('Escape');
-await new Promise(r => setTimeout(r, 2000));
-
-// Выключаем мик и камеру
-console.log("[recorder] Выключаем микрофон и камеру...");
-await page.evaluate(() => {
-    const micBtn = document.querySelector('[data-testid="turn-off-mic-button"]');
-    if (micBtn) micBtn.click();
-    const camBtn = document.querySelector('[data-testid="turn-off-camera-button"]');
-    if (camBtn) camBtn.click();
-});
-
-// Кнопка "Присоединиться"
-console.log("[recorder] Ищем кнопку входа...");
-const joinButton = await page.evaluateHandle(() => {
-  const buttons = [...document.querySelectorAll("button, [role='button']")];
-  return buttons.find((b) => /подключиться|присоединиться|join/i.test(b.textContent));
-});
-
-if (joinButton && joinButton.asElement()) {
-    await page.evaluate((el) => el.click(), joinButton);
-    console.log("[recorder] Кнопка входа нажата! Входим на встречу...");
-}
-
-console.log("[recorder] Запись активна. Ожидание...");
-
-// ФУНКЦИЯ ДЛЯ ЧИСТОЙ ОСТАНОВКИ (Фикс повреждения файлов)
+// ФУНКЦИЯ ДЛЯ ЧИСТОЙ ОСТАНОВКИ
 async function gracefulShutdown() {
-    console.log("[recorder] Завершение записи...");
+    console.log("[recorder] Завершение записи и сохранение файлов...");
     try {
         await page.evaluate(() => {
             if (window.__stopRecorder) window.__stopRecorder();
         });
-        await new Promise(r => setTimeout(r, 3000)); // Ждем финальные чанки
+        await new Promise(r => setTimeout(r, 3000)); 
     } catch (e) {}
-    await browser.close();
-    console.log("[recorder] Браузер закрыт.");
+    if (browser) await browser.close();
+    console.log("[recorder] Браузер закрыт штатно.");
     process.exit(0);
 }
 
-// Обработка закрытия браузера вручную
-browser.on('disconnected', () => {
-    console.log("[recorder] Браузер закрыт пользователем.");
-    process.exit(0);
-});
-
-// Обработка Ctrl+C
-process.on("SIGINT", async () => {
-    await gracefulShutdown();
-});
-
-// Авто-стоп если встреча закончилась (признак - редирект на главную)
-setInterval(async () => {
-    try {
-        const path = await page.evaluate(() => window.location.pathname);
-        if (path === "/" || path === "") {
-            console.log("[recorder] Встреча завершена. Закрываемся.");
-            await browser.close();
-        }
-    } catch (e) {}
-}, 5000);
