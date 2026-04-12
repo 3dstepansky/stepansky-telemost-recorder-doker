@@ -35,21 +35,64 @@ async function main() {
     // 1. ЗАПУСК ЗАПИСИ
     console.log("[step 1] Запуск процесса записи...");
     const recorder = spawn("node", ["recorder.js", joinUrl, audioFile], {
-        stdio: "inherit"
+        stdio: "inherit",
+        env: { 
+            ...process.env, 
+            MAX_IDLE_MINS: process.env.MAX_IDLE_MINS || "3",
+            MAX_DURATION_MINS: process.env.MAX_DURATION_MINS || "180"
+        }
     });
 
     recorder.on("close", async (code) => {
         console.log(`[step 1] Процесс записи завершен с кодом: ${code}`);
         
         if (!existsSync(audioFile)) {
-            console.error("[error] Аудиофайл не был создан. Возможно, бот не смог подключиться.");
+            console.error("[error] Аудиофайл не был создан.");
             return;
         }
 
         try {
+            // 1.5 ОБРАБОТКА АУДИО (VAD + Splitting)
+            console.log("[step 1.5] Обработка аудио: удаление тишины и нарезка...");
+            const cleanAudio = join(outputDir, "audio_clean.webm");
+            
+            // Удаление тишины
+            const vadTask = spawn("ffmpeg", [
+                "-i", audioFile,
+                "-af", "silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-30dB",
+                cleanAudio
+            ]);
+            await new Promise(r => vadTask.on("close", r));
+            console.log("[step 1.5] Тишина удалена.");
+
+            // Нарезка на чанки по 20 минут
+            const chunkPattern = join(outputDir, "chunk_%03d.webm");
+            const splitTask = spawn("ffmpeg", [
+                "-i", cleanAudio,
+                "-f", "segment",
+                "-segment_time", "1200", // 20 минут
+                "-c", "copy",
+                chunkPattern
+            ]);
+            await new Promise(r => splitTask.on("close", r));
+            console.log("[step 1.5] Аудио нарезано на части по 20 минут.");
+
+            // Собираем список чанков
+            const chunks = [];
+            let i = 0;
+            while (true) {
+                const chunkPath = join(outputDir, `chunk_${String(i).padStart(3, '0')}.webm`);
+                if (existsSync(chunkPath)) {
+                    chunks.push(chunkPath);
+                    i++;
+                } else {
+                    break;
+                }
+            }
+
             // 2. ТРАНСКРИБАЦИЯ
-            console.log("[step 2] Начинаем расшифровку аудио...");
-            const transcript = await transcribeAudio(audioFile);
+            console.log("[step 2] Начинаем расшифровку аудио (пакетная обработка)...");
+            const transcript = await transcribeAudio(chunks.length > 0 ? chunks : [audioFile]);
             writeFileSync(transcriptFile, JSON.stringify(transcript, null, 2));
             console.log(`[step 2] Текст сохранен в: ${transcriptFile}`);
 

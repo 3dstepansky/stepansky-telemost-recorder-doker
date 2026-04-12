@@ -1,6 +1,6 @@
 {
   "name": "stepansky-telemost",
-  "version": "0.001",
+  "version": "0.002",
   "private": true,
   "type": "module",
   "description": "Zero Cost Yandex.Telemost Recorder (Guest Mode)",

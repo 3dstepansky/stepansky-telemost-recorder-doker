@@ -136,8 +136,76 @@ await page.evaluateOnNewDocument(() => {
 try {
     await page.goto(joinUrl, { waitUntil: "networkidle2", timeout: 45000 });
     console.log("[recorder] Страница загружена");
-} catch (e) {
-    console.error("[recorder] Ошибка загрузки:", e.message);
+    // --- МОНИТОР ПРИСУТСТВИЯ И ТАЙМ-АУТЫ ---
+    const MAX_IDLE_MINS = parseInt(process.env.MAX_IDLE_MINS || "3");
+    const MAX_DURATION_MINS = parseInt(process.env.MAX_DURATION_MINS || "180");
+    let idleSeconds = 0;
+    let totalSeconds = 0;
+
+    console.log(`[monitor] Лимиты: Ожидание ${MAX_IDLE_MINS}м, Макс. запись ${MAX_DURATION_MINS}м`);
+
+    const monitorInterval = setInterval(async () => {
+        totalSeconds += 10;
+        
+        // 1. Проверка общего времени (Hard Timeout)
+        if (totalSeconds >= MAX_DURATION_MINS * 60) {
+            console.log(`[monitor] Достигнут лимит времени записи (${MAX_DURATION_MINS} мин). Завершаю...`);
+            clearInterval(monitorInterval);
+            await gracefulShutdown();
+            return;
+        }
+
+        // 2. Проверка количества участников
+        try {
+            const count = await page.evaluate(() => {
+                // Ищем кнопку участников. Обычно там есть число.
+                // Пытаемся найти элементы, которые могут содержать количество участников
+                const potentialElements = [
+                    ...document.querySelectorAll('[class*="Participants"]'),
+                    ...document.querySelectorAll('[class*="participants"]'),
+                    ...document.querySelectorAll('[class*="Count"]'),
+                    ...document.querySelectorAll('[title*="Участники"]'),
+                    ...document.querySelectorAll('[aria-label*="Участники"]')
+                ];
+
+                for (const el of potentialElements) {
+                    const text = el.innerText || el.textContent || "";
+                    const match = text.match(/(\d+)/);
+                    if (match) return parseInt(match[1]);
+                }
+
+                // Если не нашли на кнопках, ищем в списке (если открыт)
+                const participantList = document.querySelectorAll('[class*="Participant-Name"], [class*="ParticipantItem"]');
+                if (participantList.length > 0) return participantList.length;
+
+                return 2; // По умолчанию считаем, что мы не одни, чтобы не выйти раньше времени при ошибке
+            });
+
+            console.log(`[monitor] Участников: ${count} | Прошло: ${Math.floor(totalSeconds/60)}м`);
+
+            if (count <= 1) {
+                idleSeconds += 10;
+                const remaining = (MAX_IDLE_MINS * 60) - idleSeconds;
+                if (idleSeconds % 30 === 0) {
+                    console.log(`[monitor] Бот один в комнате. Выход через ${Math.floor(remaining)} сек...`);
+                }
+            } else {
+                idleSeconds = 0;
+            }
+
+            if (idleSeconds >= MAX_IDLE_MINS * 60) {
+                console.log(`[monitor] Бот был один слишком долго (${MAX_IDLE_MINS} мин). Завершаю сессию.`);
+                clearInterval(monitorInterval);
+                await gracefulShutdown();
+            }
+        } catch (e) {
+            console.error("[monitor] Ошибка при проверке участников:", e.message);
+        }
+    }, 10000); // Проверка каждые 10 секунд
+
+} catch (error) {
+    console.error("[error] Критическая ошибка рекордера:", error);
+    process.exit(1);
 }
 
 // ЛОГИКА ВХОДА ГАСТЕМ
