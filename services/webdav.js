@@ -7,17 +7,19 @@ import 'dotenv/config';
  * Загружает локальный файл на Яндекс.Диск по протоколу WebDAV.
  * Автоматически создает папку Yandex.Telemost.Records и подпапку встречи.
  * 
- * @param {string} localFilePath - Локальный путь к аудиофайлу
+ * @param {string} localFilePath - Локальный путь к файлу
  * @param {string} targetDirName - Имя подпапки встречи (например, 2026-05-29_MeetingName)
  * @param {string} targetFileName - Имя файла на Яндекс.Диске (например, meeting_audio.webm)
+ * @param {string} [yandexUser] - Логин Яндекс (опционально, фоллбэк на .env)
+ * @param {string} [yandexPassword] - Пароль WebDAV (опционально, фоллбэк на .env)
  * @returns {Promise<string>} Относительный путь к загруженному файлу
  */
-export async function uploadToYandexDisk(localFilePath, targetDirName, targetFileName) {
-  const username = process.env.YANDEX_USER;
-  const password = process.env.YANDEX_WEBDAV_PASSWORD;
+export async function uploadToYandexDisk(localFilePath, targetDirName, targetFileName, yandexUser, yandexPassword) {
+  const username = yandexUser || process.env.YANDEX_USER;
+  const password = yandexPassword || process.env.YANDEX_WEBDAV_PASSWORD;
 
   if (!username || !password) {
-    throw new Error("Не заданы YANDEX_USER или YANDEX_WEBDAV_PASSWORD в файле .env");
+    throw new Error("Не заданы логин или пароль для Яндекс.Диска (передайте в функцию или укажите в .env)");
   }
 
   if (!fs.existsSync(localFilePath)) {

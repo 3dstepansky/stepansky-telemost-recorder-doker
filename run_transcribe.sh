@@ -1,15 +1,17 @@
 #!/bin/bash
 
-# Аргументы из n8n: $1 - Путь, $2 - Заголовок, $3 - Chat ID
+# Аргументы из n8n
 FILE_PATH=$1
-TITLE=$2
-CHAT_ID=$3
+TARGET_DIR_NAME=$2
+TITLE=$3
+CHAT_ID=$4
+YANDEX_USER=$5
+YANDEX_PASS=$6
 
 if [ ! -f "$FILE_PATH" ]; then
   echo "{\"error\":\"Файл $FILE_PATH не найден\"}"
   exit 1
 fi
 
-# Вызываем Node.js скрипт транскрибации
-# Он возвращает JSON, который n8n распарсит в Parse Transcript
-node transcribe.js "$FILE_PATH" "$TITLE" "$CHAT_ID"
+# Вызываем Node.js скрипт (Этап 2)
+node transcribe.js "$FILE_PATH" "$TARGET_DIR_NAME" "$TITLE" "$CHAT_ID" "$YANDEX_USER" "$YANDEX_PASS"
