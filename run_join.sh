@@ -21,7 +21,7 @@ WEBHOOK_URL="${N8N_WEBHOOK_URL:-https://stepan8nsky.casacam.net/webhook/telemost
 HOST_PATH="${HOST_RECORDINGS_DIR:-/opt/telemost-recorder/recordings}"
 
 # Запуск контейнера
-docker run -d \
+docker run -d --init \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   -e CHAT_ID="$CHAT_ID" \

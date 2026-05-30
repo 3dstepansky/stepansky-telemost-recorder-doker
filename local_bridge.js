@@ -50,7 +50,7 @@ const server = http.createServer(async (req, res) => {
         const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || 'https://stepan8nsky.casacam.net/webhook/telemost-recording-finished';
         const groqKey = process.env.GROQ_API_KEY || '';
         
-        const dockerCmd = `docker run -d --name ${CONTAINER_NAME} ` +
+        const dockerCmd = `docker run -d --init --name ${CONTAINER_NAME} ` +
           `-e CHAT_ID="${chat_id}" ` +
           `-e MEETING_TITLE="${title}" ` +
           `-e N8N_WEBHOOK_URL="${n8nWebhookUrl}" ` +
