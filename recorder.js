@@ -49,7 +49,9 @@ if (!isCreateMode) {
   console.log(`[recorder] Режим создания новой встречи активен.`);
 }
 
-const BOT_NAME = process.env.BOT_DISPLAY_NAME || "Telemost Recorder";
+// Очистка от случайных кавычек или скобок
+const rawBotName = process.env.BOT_DISPLAY_NAME || "Telemost Recorder";
+const BOT_NAME = rawBotName.replace(/^["'\[\(\{]+|["'\]\)\}]+$/g, '');
 
 const browser = await puppeteer.launch({
   headless: isHeadless,
