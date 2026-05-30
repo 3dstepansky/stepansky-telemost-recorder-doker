@@ -5,8 +5,8 @@ TITLE=$1
 CHAT_ID=$2
 
 # 1. Запускаем рекордер в режиме --create, чтобы получить URL
-# Мы делаем это синхронно, так как нам нужна ссылка для ответа пользователю
-CREATE_LOG=$(node recorder.js --create 2>/dev/null)
+# Мы делаем это через изолированный Docker-контейнер, чтобы избежать появления зомби-процессов Chromium на хосте
+CREATE_LOG=$(docker run --rm --init --entrypoint node stepansky-telemost-recorder:latest recorder.js --create 2>/dev/null)
 JOIN_URL=$(echo "$CREATE_LOG" | grep -o 'https://telemost.yandex.ru/j/[0-9a-zA-Z]*' | head -n 1)
 
 if [ -z "$JOIN_URL" ]; then
