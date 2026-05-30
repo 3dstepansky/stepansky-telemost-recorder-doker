@@ -1,5 +1,5 @@
 # Используем официальный образ Node.js (slim версия для уменьшения размера)
-FROM cr.yandex/mirror/library/node:20-slim
+FROM node:20-slim
 
 # Установка зависимостей системных библиотек для работы Chromium в Docker
 RUN apt-get update && apt-get install -y --no-install-recommends \
