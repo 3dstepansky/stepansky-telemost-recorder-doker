@@ -12,6 +12,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  chmodSync,
 } from "fs";
 import { resolve, dirname } from "path";
 import { tmpdir } from "os";
@@ -36,8 +37,12 @@ if (!isCreateMode) {
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
+  // Change directory permissions so host user (ubuntu) can create transcript.txt and delete files
+  try { chmodSync(outputDir, 0o777); } catch(e) { console.error(e); }
+  
   // Очистка старого файла
   writeFileSync(outputPath, "");
+  try { chmodSync(outputPath, 0o666); } catch(e) { console.error(e); }
   console.log(`[recorder] join_url: ${joinUrl}`);
   console.log(`[recorder] output:   ${outputPath}`);
 } else {
