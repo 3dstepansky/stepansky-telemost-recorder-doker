@@ -28,6 +28,6 @@ docker run -d --init \
   -e N8N_WEBHOOK_URL="$WEBHOOK_URL" \
   -v "$HOST_PATH":/app/recordings \
   --network="host" \
-  stepansky-telemost-recorder:latest node run.js "$JOIN_URL"
+  stepansky-telemost-recorder:latest "$JOIN_URL"
 
 echo "{\"status\":\"started\", \"chat_id\":\"$CHAT_ID\", \"container\":\"$CONTAINER_NAME\"}"
