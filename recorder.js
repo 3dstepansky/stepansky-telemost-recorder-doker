@@ -48,6 +48,9 @@ const BOT_NAME = process.env.BOT_DISPLAY_NAME || "Telemost Recorder";
 
 const browser = await puppeteer.launch({
   headless: isHeadless,
+  handleSIGINT: false,
+  handleSIGTERM: false,
+  handleSIGHUP: false,
   defaultViewport: { width: 1280, height: 720 },
   args: [
     "--no-sandbox",
@@ -277,8 +280,29 @@ async function gracefulShutdown() {
         await page.evaluate(() => {
             if (window.__stopRecorder) window.__stopRecorder();
         });
+        
+        console.log("[recorder] Нажимаем кнопку 'Покинуть встречу'...");
+        await page.evaluate(() => {
+            const leaveSelectors = [
+                '[data-testid="leave-call-button"]', 
+                'button[class*="LeaveButton"]', 
+                'button[aria-label*="Покинуть"]', 
+                'button[aria-label*="Завершить"]',
+                'button[data-tooltip*="Покинуть"]'
+            ];
+            for (const selector of leaveSelectors) {
+                const btn = document.querySelector(selector);
+                if (btn) {
+                    btn.click();
+                    break;
+                }
+            }
+        });
+        
         await new Promise(r => setTimeout(r, 3000)); 
-    } catch (e) {}
+    } catch (e) {
+        console.error("[recorder] Ошибка при graceful shutdown:", e.message);
+    }
     if (browser) await browser.close();
     console.log("[recorder] Браузер закрыт штатно.");
     process.exit(0);
