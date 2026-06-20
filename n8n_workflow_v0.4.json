@@ -1,0 +1,1796 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "*"
+        ],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger-node",
+      "name": "TelegramTrigger",
+      "position": [
+        -1488,
+        688
+      ],
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "webhookId": "83b8fad3-e9c5-4334-9077-1e6c9df36809",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telemost-recording-finished",
+        "options": {}
+      },
+      "id": "webhook-trigger-node",
+      "name": "WebhookTrigger",
+      "position": [
+        -1408,
+        1856
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "426fdb48-6398-4e6c-981c-fb53cd4bad9a"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "2d4ac39f-dbb8-4d08-bb7b-95795115eddc",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/start"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "/start"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "7b8e2f11-533f-4f36-9442-7d1daa5903e1",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "🔙 Назад"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "🔙 Назад"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "27aa6cc1-0196-4739-8fbc-14c1f05de7a1",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "🔴 Запись встреч"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "🔴 Запись встреч"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "f1c0de8e-3449-4f07-9d4c-e9550bd87036",
+                    "leftValue": "={{ $json.message.reply_to_message.text }}",
+                    "operator": {
+                      "operation": "startsWith",
+                      "type": "string"
+                    },
+                    "rightValue": "=🔴 Запись встреч Яндекс.Телемост"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "🔴 Запись встреч Яндекс.Телемост"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "d10388d7-5a63-4b29-aff4-78261f4f638f",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "🧠 Аналитика и ИИ"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "🧠 Аналитика и ИИ"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "3b3ca90f-de1c-4a1e-8bcd-f53f7c282307",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "⚙️ Настройки"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "⚙️ Настройки"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "a261ce48-ac48-4a52-80de-443f105280a6",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "ℹ️ Помощь"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "ℹ️ Помощь"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "4474de03-bc6b-4a94-9363-0d64e47c85ab",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "📂 Список встреч"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "📂 Список встреч"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "8c7525e9-754e-4421-9d78-322ca2b06875",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "💡 Сделать саммари"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "💡 Сделать саммари"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "11ad8f49-ed62-414d-a2c2-38bad6b8473f",
+                    "leftValue": "={{ $json.message.reply_to_message.text }}",
+                    "operator": {
+                      "operation": "startsWith",
+                      "type": "string"
+                    },
+                    "rightValue": "👤 Отображаемое имя бота"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "👤 Отображаемое имя бота"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "5d8b4ee2-2373-4d7b-af88-3761b219670e",
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "👤 Имя бота"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "👤 Имя бота"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "ac6f71fd-ada9-41cb-8020-8b791912c40f",
+                    "leftValue": "={{ $json.callback_query.message.reply_markup.inline_keyboard[0][0].callback_data }}",
+                    "operator": {
+                      "operation": "startsWith",
+                      "type": "string"
+                    },
+                    "rightValue": "stop"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "stop"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "🗂 Настройка Яндекс Диска"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "🗂 Настройка Яндекс Диска"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.reply_to_message.text }}",
+                    "operator": {
+                      "operation": "startsWith",
+                      "type": "string"
+                    },
+                    "rightValue": "🗂 Доступ Яндекс Диск"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "🗂 Доступ Яндекс Диск"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-command-node",
+      "name": "RouteCommand",
+      "position": [
+        -1200,
+        528
+      ],
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
+        "text": "✅ Запрос на запись отправлен!\nБот-Ассистент подключается к комнате Яндекс.Телемоста.\n\nЗапись началась 🔴",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⏹ Остановить запись",
+                    "additionalFields": {
+                      "callback_data": "={{ 'stop_' + $json.meeting_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "notify-start-success-node",
+      "name": "NotifyStartSuccess",
+      "position": [
+        -112,
+        272
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "424f0729-0ef3-4a90-8b53-b07f6976e77b",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
+        "text": "=❌ Ошибка при старте записи:\n`{{ $json.error || $json.message }}`",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "notify-start-error-node",
+      "name": "NotifyStartError",
+      "position": [
+        -112,
+        432
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "a53f2666-ca4f-4086-969f-940a7ef2fca8",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('TelegramTrigger').item.json.callback_query.message.chat.id }}",
+        "text": "=❌ Ошибка при остановке записи:\n`{{ $json.error || $json.message }}`",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "notify-stop-error-node",
+      "name": "NotifyStopError",
+      "position": [
+        -224,
+        1296
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "b1301273-48d1-4694-a7ea-e1ed96709aa6",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.telemost_meeting_transcripts (title, file_path, chat_id, transcript, utterances, speaker_count, utterance_count, operation_id, transcribed_at) VALUES ($1, $2, $3, $4, $5::jsonb, $6::integer, $7::integer, $8, $9::timestamptz) ON CONFLICT (operation_id) DO NOTHING RETURNING id",
+        "options": {
+          "queryReplacement": "={{ [ $('ParseTranscriptResult').first().json.title, $('ParseTranscriptResult').first().json.file_path, $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id, $('ParseTranscriptResult').first().json.transcript, JSON.stringify($('ParseTranscriptResult').first().json.utterances || []), $('ParseTranscriptResult').first().json.speaker_count || 1, $('ParseTranscriptResult').first().json.utterance_count || 0, $('ParseTranscriptResult').first().json.operation_id, $('ParseTranscriptResult').first().json.transcribed_at ] }}"
+        }
+      },
+      "id": "save-supabase-local-node",
+      "name": "SaveSupabaseLocal",
+      "position": [
+        880,
+        1744
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "wgT5uILSWYRSIA2d",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('NotifyTranscribeStart').first().json.chatId }}",
+        "text": "=✅ Транскрибация завершена!\n\n📋 *{{ $('TranscribeLocal').first().json.title }}*\n👤 Спикеров: {{ $('TranscribeLocal').first().json.speaker_count }}\n💬 Реплик: {{ $('TranscribeLocal').first().json.utterance_count }}\n🔗 Файл на Яндекс.Диске: `{{ $('TranscribeLocal').first().json.file_path }}`\n\n📝 Текст:\n{{ $('TranscribeLocal').first().json.transcript.substring(0, 2000) }}{{ $('TranscribeLocal').first().json.transcript.length > 2000 ? '\\n\\n...(полный текст сохранен в Яндекс.Диск и Supabase)' : '' }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-transcript-success-node",
+      "name": "SendTranscriptSuccess",
+      "position": [
+        1184,
+        1744
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "6840da02-7008-4dbf-a0d1-f1c6fd8d0291",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT title, transcribed_at FROM public.telemost_meeting_transcripts ORDER BY transcribed_at DESC LIMIT 5",
+        "options": {}
+      },
+      "id": "get-meetings-db-node",
+      "name": "GetMeetingsDb",
+      "position": [
+        -496,
+        736
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "wgT5uILSWYRSIA2d",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (items.length === 0) {\n  return [{ json: { text: \"В базе данных пока нет сохраненных встреч.\" } }];\n}\nlet text = \"📂 *Последние записанные встречи (до 5 шт):*\\n\\n\";\nitems.forEach((item, index) => {\n  const date = new Date(item.json.transcribed_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n  text += `${index + 1}. 📋 *${item.json.title}*\\n   🕐 ${date}\\n\\n`;\n});\nreturn [{ json: { text } }];"
+      },
+      "id": "format-meetings-list-node",
+      "name": "FormatMeetingsList",
+      "position": [
+        -288,
+        736
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-meetings-list-node",
+      "name": "SendMeetingsList",
+      "position": [
+        -96,
+        736
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "6d9d3107-2e73-4b7a-9964-d5ab54a55d11",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "={{ '👤 Отображаемое имя бота в Яндекс.Телемосте сейчас: *' + ($('GetMeetingbotName1').first().json.bot_display_name || 'Бот-Ассистент') + '*\\n\\nОтправьте новое имя в ответ на это сообщение.' }}",
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-name-help-node",
+      "name": "SendNameHelp",
+      "position": [
+        -496,
+        1024
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "354d45e6-8cb4-43bf-bb88-5e541a6e23e2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "👋 Привет! Я — Бот-Ассистент для записи встреч Яндекс.Телемост.\\nЯ умею:\\n• 🔴 Подключаться к встрече и записывать аудио\\n• 📝 Транскрибировать запись в текст\\n• 💡 Генерировать саммари встречи\\n• ☁️ Сохранять всё на Яндекс.Диск\\nВыберите действие в меню ниже 👇",
+        "text": "👋 Привет! Я — Бот-Ассистент для записи встреч Яндекс.Телемост.\nЯ умею:\n• 🔴 Подключаться к встрече и записывать аудио\n• 📝 Транскрибировать запись в текст\n• 💡 Генерировать саммари встречи\n• ☁️ Сохранять всё на Яндекс.Диск\nВыберите действие в меню ниже 👇",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔴 Запись встреч",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🧠 Аналитика и ИИ",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⚙️ Настройки",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "ℹ️ Помощь",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b39b41b7-55fa-458c-9fb9-a29cbd1621e7",
+      "name": "SendMainMenu1",
+      "position": [
+        -736,
+        96
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "41afcfac-9afa-4345-9548-9bb89a3d72a2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ (($json.message || {}).chat || {}).id || ((($json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🔴 Запись встреч Яндекс.Телемост\n\nПожалуйста, отправьте ссылку на встречу в чат (в формате https://telemost.yandex.ru/j/...).\n\nПосле этого бот автоматически подключится к встрече и начнет запись.",
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true,
+          "selective": false
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "859d0b6b-452e-44e6-9810-81687d2a9a1f",
+      "name": "SendRecordMenu",
+      "position": [
+        -736,
+        240
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "3c194103-a5f5-4766-a48d-ea0f65025ab9",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "🧠 Интеллектуальный ИИ-ассистент встреч:",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📝 Транскрибировать",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "💡 Сделать саммари",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📂 Список встреч",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🔙 Назад",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f0d3e569-165b-48c9-9de9-bbe355be6d0b",
+      "name": "SendAIMenu",
+      "position": [
+        -736,
+        512
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "363e0ca8-bdaa-4d25-bd00-53064626448d",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "⚙️ Настройки бота рекордера:",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "👤 Имя бота",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🗂 Настройка Яндекс Диска",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔙 Назад",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e49bf6df-cba3-433f-b6b2-52532dcb8898",
+      "name": "SendSettingsMenu",
+      "position": [
+        -736,
+        656
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "157fe8cc-cf78-4bf0-874a-49cd92e88b22",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.telemost_user_settings (chat_id, bot_display_name, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (chat_id) DO UPDATE SET bot_display_name = EXCLUDED.bot_display_name, updated_at = NOW() RETURNING bot_display_name",
+        "options": {
+          "queryReplacement": "={{ [ $('TelegramTrigger').first().json.message.chat.id, $('TelegramTrigger').first().json.message.text ] }}"
+        }
+      },
+      "id": "96488667-0780-4cee-92d9-b43ff132e36c",
+      "name": "PutMeetingbotName",
+      "position": [
+        -752,
+        880
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "wgT5uILSWYRSIA2d",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bot_display_name FROM public.telemost_user_settings WHERE chat_id = $1",
+        "options": {
+          "queryReplacement": "={{ [ $('TelegramTrigger').first().json.message.chat.id ] }}"
+        }
+      },
+      "id": "6c5c9c14-2aa4-44e2-83ed-9024f934bc0a",
+      "name": "GetMeetingbotName1",
+      "position": [
+        -752,
+        1024
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "wgT5uILSWYRSIA2d",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "={{ '✅ Имя бота обновлено!\\n\\nТеперь при входе в Яндекс.Телемост бот будет отображаться как: *' + ($('PutMeetingbotName').first().json.bot_display_name || $('TelegramTrigger').first().json.message.text) + '*' }}",
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "93e4d9e1-5520-400e-bd3b-d19e6c7f66f5",
+      "name": "SendNameHelp1",
+      "position": [
+        -496,
+        880
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "354d45e6-8cb4-43bf-bb88-5e541a6e23e2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=bash /opt/telemost-recorder/run_join.sh \"{{ $('TelegramTrigger').first().json.message.text }}\" \"{{ $('TelegramTrigger').first().json.message.chat.id }}\" \"{{ $json.bot_display_name || '' }}\""
+      },
+      "name": "Join Meeting4",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        368
+      ],
+      "id": "f8f7454f-eac1-4885-97c9-796a5442d515",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n3P25jRsFxsta8nz",
+          "name": "telemost key"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=bash /opt/telemost-recorder/run_stop.sh \"{{ $json.callback_query.message.chat.id }}\" \"{{ $json.callback_query.data.split('_')[1] || '' }}\""
+      },
+      "name": "Stop Meeting1",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        1200
+      ],
+      "id": "77a9fac8-0164-417b-ba16-e0b3798143eb",
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n3P25jRsFxsta8nz",
+          "name": "telemost key"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('TelegramTrigger').item.json.callback_query.message.chat.id }}",
+        "text": "⏹ Запрос на остановку записи отправлен.\nБот завершает сессию и сохраняет аудиофайл в яндекс диск.\n\nОжидайте автоматическую транскрибацию...",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔴 Запись встреч",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🧠 Аналитика и ИИ",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⚙️ Настройки",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "ℹ️ Помощь",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8e21f67e-31b6-46ff-8603-d3e9aa02f48f",
+      "name": "SendMainMenu",
+      "position": [
+        -224,
+        1120
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "41afcfac-9afa-4345-9548-9bb89a3d72a2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=cd /opt/telemost-recorder && source .env; if [ -f .env.yandex ]; then source .env.yandex; fi; bash run_upload.sh \"{{ $json.body?.file || $json.file }}\" \"{{ $json.body?.title || $json.title }}\" \"{{ $json.body?.chat_id || $json.chat_id }}\" \"${YANDEX_USER}\" \"${YANDEX_PASS:-$YANDEX_WEBDAV_PASSWORD}\""
+      },
+      "id": "upload-local-node",
+      "name": "UploadLocal",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        -768,
+        1872
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n3P25jRsFxsta8nz",
+          "name": "telemost key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const lines = ($input.first().json.stdout || '').trim().split('\\n');\n  const jsonLine = lines.reverse().find(l => l.startsWith('{'));\n  const parsed = JSON.parse(jsonLine);\n  return [{ json: parsed }];\n} catch (e) {\n  return [{ json: { error: e.message, raw: $input.first().json.stderr || $input.first().json.stdout } }];\n}"
+      },
+      "id": "parse-upload-result-node",
+      "name": "ParseUploadResult",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        1872
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "upload-error-check",
+              "leftValue": "={{ $json.error }}",
+              "operator": {
+                "operation": "empty",
+                "singleValue": true,
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-upload-error-node",
+      "name": "CheckUploadError",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -368,
+        1872
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id || $('WebhookTrigger').first().json.query?.chat_id }}",
+        "text": "✅ Встреча завершена. Аудио загружено на диск. Начинаю расшифровку...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "notify-transcribe-start-node",
+      "name": "NotifyTranscribeStart",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        1760
+      ],
+      "webhookId": "a283e8f4-d0bc-4f87-a849-58a689838e0f",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=cd /opt/telemost-recorder && source .env; if [ -f .env.yandex ]; then source .env.yandex; fi; bash run_transcribe.sh \"{{ $('WebhookTrigger').first().json.body?.file || $('WebhookTrigger').first().json.file }}\" \"{{ $('ParseUploadResult').first().json.target_dir_name }}\" \"{{ $('ParseUploadResult').first().json.title }}\" \"{{ $('ParseUploadResult').first().json.chat_id }}\" \"${YANDEX_USER}\" \"${YANDEX_PASS:-$YANDEX_WEBDAV_PASSWORD}\""
+      },
+      "id": "transcribe-local-node",
+      "name": "TranscribeLocal",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        32,
+        1760
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n3P25jRsFxsta8nz",
+          "name": "telemost key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const lines = ($input.first().json.stdout || '').trim().split('\\n');\n  const jsonLine = lines.reverse().find(l => l.startsWith('{'));\n  const parsed = JSON.parse(jsonLine);\n  return [{ json: parsed }];\n} catch (e) {\n  return [{ json: { error: e.message, raw: $input.first().json.stderr || $input.first().json.stdout } }];\n}"
+      },
+      "id": "parse-transcript-result-node",
+      "name": "ParseTranscriptResult",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "parse-error-check",
+              "leftValue": "={{ $json.error }}",
+              "operator": {
+                "operation": "empty",
+                "singleValue": true,
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
+        },
+        "options": {}
+      },
+      "id": "check-parse-error-node",
+      "name": "CheckParseError",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        432,
+        1760
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id }}",
+        "text": "=❌ Ошибка сервера:\n`{{ $json.error || $json.message || $json.raw }}`",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "notify-server-error-node",
+      "name": "NotifyServerError",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        1888
+      ],
+      "webhookId": "2ae0ade3-072d-495a-928e-df8bc923bc83",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "🗂 Доступ Яндекс Диск\n\nОтправьте в ответ на это сообщение ваш Email и Пароль приложения от Яндекс.Диска через пробел.\n\nПример:\nmyemail@yandex.ru p@ssw0rd123",
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-yandex-help-node",
+      "name": "SendYandexHelp",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -880,
+        1472
+      ],
+      "webhookId": "8851d80e-cee9-4cc9-8a59-2697de62cc87",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "privateKey",
+        "command": "=cd /opt/telemost-recorder && echo -e \"YANDEX_USER={{ $json.message.text.split(' ')[0] }}\\nYANDEX_PASS={{ $json.message.text.split(' ').slice(1).join(' ') }}\" > .env.yandex"
+      },
+      "id": "save-yandex-creds-node",
+      "name": "SaveYandexCreds",
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        1472
+      ],
+      "credentials": {
+        "sshPrivateKey": {
+          "id": "n3P25jRsFxsta8nz",
+          "name": "telemost key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('TelegramTrigger').first().json.message?.chat?.id || $json.message?.chat?.id || 533234854 }}",
+        "text": "✅ Доступ к Яндекс.Диску успешно сохранен! Теперь вы можете записывать встречи.",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔴 Запись встреч",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🧠 Аналитика и ИИ",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⚙️ Настройки",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "ℹ️ Помощь",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9ccda8b0-3095-405a-8521-7458b3db0c39",
+      "name": "NotifyYandexSuccess",
+      "position": [
+        -224,
+        1472
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "41afcfac-9afa-4345-9548-9bb89a3d72a2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "auto-stopped-check",
+              "leftValue": "={{ $json.body?.auto_stopped }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          }
+        },
+        "options": {}
+      },
+      "id": "check-auto-stopped-node",
+      "name": "CheckAutoStopped",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1216,
+        1856
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id }}",
+        "text": "🔔 Встреча завершилась автоматически.\nБот обнаружил, что все участники покинули комнату и завершил запись.\n\nЗагружаю аудио и начинаю расшифровку...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "notify-auto-stopped-node",
+      "name": "NotifyAutoStopped",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -992,
+        1776
+      ],
+      "webhookId": "8207d253-7476-4cc0-a7a4-6d045191f941",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT bot_display_name FROM public.telemost_user_settings WHERE chat_id = $1",
+        "options": {
+          "queryReplacement": "={{ [ $('TelegramTrigger').first().json.message.chat.id ] }}"
+        }
+      },
+      "id": "get-bot-name-for-join-node",
+      "name": "GetBotNameForJoin",
+      "position": [
+        -768,
+        368
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "wgT5uILSWYRSIA2d",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const lines = ($input.first().json.stdout || '').trim().split('\\n');\n  const jsonLine = lines.reverse().find(l => l.startsWith('{'));\n  const parsed = JSON.parse(jsonLine);\n  return [{ json: parsed }];\n} catch (e) {\n  return [{ json: { error: e.message, raw: $input.first().json.stderr || $input.first().json.stdout } }];\n}"
+      },
+      "id": "parse-join-result-node",
+      "name": "ParseJoinResult",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "join-error-check",
+              "leftValue": "={{ $json.error }}",
+              "operator": {
+                "operation": "empty",
+                "singleValue": true,
+                "type": "string"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-join-error-node",
+      "name": "CheckJoinError",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -256,
+        272
+      ]
+    }
+  ],
+  "connections": {
+    "TelegramTrigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "RouteCommand",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "WebhookTrigger": {
+      "main": [
+        [
+          {
+            "node": "CheckAutoStopped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RouteCommand": {
+      "main": [
+        [
+          {
+            "node": "SendMainMenu1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendMainMenu1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendRecordMenu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GetBotNameForJoin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendAIMenu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendSettingsMenu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "GetMeetingsDb",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "PutMeetingbotName",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GetMeetingbotName1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop Meeting1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendYandexHelp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SaveYandexCreds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SaveSupabaseLocal": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SendTranscriptSuccess",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GetMeetingsDb": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "FormatMeetingsList",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "FormatMeetingsList": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SendMeetingsList",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "PutMeetingbotName": {
+      "main": [
+        [
+          {
+            "node": "SendNameHelp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetMeetingbotName1": {
+      "main": [
+        [
+          {
+            "node": "SendNameHelp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetBotNameForJoin": {
+      "main": [
+        [
+          {
+            "node": "Join Meeting4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Meeting4": {
+      "main": [
+        [
+          {
+            "node": "ParseJoinResult",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NotifyStartError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParseJoinResult": {
+      "main": [
+        [
+          {
+            "node": "CheckJoinError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckJoinError": {
+      "main": [
+        [
+          {
+            "node": "NotifyStartSuccess",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NotifyStartError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stop Meeting1": {
+      "main": [
+        [
+          {
+            "node": "SendMainMenu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NotifyStopError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UploadLocal": {
+      "main": [
+        [
+          {
+            "node": "ParseUploadResult",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParseUploadResult": {
+      "main": [
+        [
+          {
+            "node": "CheckUploadError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckUploadError": {
+      "main": [
+        [
+          {
+            "node": "NotifyTranscribeStart",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NotifyServerError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NotifyTranscribeStart": {
+      "main": [
+        [
+          {
+            "node": "TranscribeLocal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TranscribeLocal": {
+      "main": [
+        [
+          {
+            "node": "ParseTranscriptResult",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParseTranscriptResult": {
+      "main": [
+        [
+          {
+            "node": "CheckParseError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckParseError": {
+      "main": [
+        [
+          {
+            "node": "SaveSupabaseLocal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NotifyServerError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SaveYandexCreds": {
+      "main": [
+        [
+          {
+            "node": "NotifyYandexSuccess",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CheckAutoStopped": {
+      "main": [
+        [
+          {
+            "node": "NotifyAutoStopped",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "UploadLocal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NotifyAutoStopped": {
+      "main": [
+        [
+          {
+            "node": "UploadLocal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
