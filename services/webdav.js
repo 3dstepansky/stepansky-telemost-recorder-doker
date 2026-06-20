@@ -91,3 +91,49 @@ export async function uploadToYandexDisk(localFilePath, targetDirName, targetFil
     throw error;
   }
 }
+
+/**
+ * Переименовывает (перемещает) папку на Яндекс.Диске с помощью метода MOVE.
+ * 
+ * @param {string} oldDirName - Старое имя папки (например, 2026-06-20_tempID)
+ * @param {string} newDirName - Новое имя папки (например, 2026-06-20_Павел_и_Ксения...)
+ * @param {string} [yandexUser] - Логин Яндекс (опционально, фоллбэк на .env)
+ * @param {string} [yandexPassword] - Пароль WebDAV (опционально, фоллбэк на .env)
+ * @returns {Promise<string>} Результирующий путь к папке на Яндекс.Диске без лидирующего слэша
+ */
+export async function renameYandexDiskFolder(oldDirName, newDirName, yandexUser, yandexPassword) {
+  const username = yandexUser || process.env.YANDEX_USER;
+  const password = yandexPassword || process.env.YANDEX_WEBDAV_PASSWORD;
+
+  if (!username || !password) {
+    throw new Error("Не заданы логин или пароль для Яндекс.Диска (передайте в функцию или укажите в .env)");
+  }
+
+  const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+  const baseUrl = 'https://webdav.yandex.ru';
+
+  const oldPath = `/Yandex.Telemost.Records/${oldDirName}`;
+  const newPath = `/Yandex.Telemost.Records/${newDirName}`;
+
+  console.log(`[webdav] Переименование папки: ${oldPath} -> ${newPath}`);
+
+  try {
+    await axios({
+      method: 'MOVE',
+      baseURL: baseUrl,
+      url: encodeURI(oldPath),
+      headers: {
+        'Authorization': authHeader,
+        'Destination': encodeURI(`${baseUrl}${newPath}`),
+        'Overwrite': 'F' // Предотвращаем перезапись, если папка с таким именем уже существует
+      }
+    });
+
+    console.log(`[webdav] Папка успешно переименована в: ${newPath}`);
+    return newPath.substring(1);
+  } catch (error) {
+    console.error('[webdav] Ошибка при переименовании папки по WebDAV:', error.response?.data || error.message);
+    throw error;
+  }
+}
+

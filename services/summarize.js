@@ -19,6 +19,9 @@ export async function summarizeTranscript(transcriptText) {
     console.log("[summarize] Начинаем генерацию бизнес-саммари...");
 
     try {
+        // Ограничиваем длину текста транскрибации для стабильности и предотвращения переполнения контекста
+        const safeTranscriptText = transcriptText ? transcriptText.substring(0, 25000) : "";
+
         const completion = await groq.chat.completions.create({
             messages: [
                 {
@@ -27,7 +30,7 @@ export async function summarizeTranscript(transcriptText) {
                 },
                 {
                     role: "user",
-                    content: `Вот текст транскрибации встречи:\n\n${transcriptText}`
+                    content: `Вот текст транскрибации встречи:\n\n${safeTranscriptText}`
                 }
             ],
             model: "llama-3.3-70b-versatile",
@@ -40,3 +43,66 @@ export async function summarizeTranscript(transcriptText) {
         throw error;
     }
 }
+
+/**
+ * Извлекает количество спикеров, их имена и краткую тему встречи для формирования названия папки.
+ * Использует JSON-режим Groq API.
+ * 
+ * @param {string} transcriptText - Текст расшифровки
+ * @returns {Promise<{speaker_count: number, speakers: string[], topic: string}>} Метаданные встречи
+ */
+export async function generateFolderMeta(transcriptText) {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+        throw new Error("GROQ_API_KEY не задан");
+    }
+
+    const groq = new Groq({ apiKey });
+
+    console.log("[summarize] Извлечение метаданных встречи из стенограммы для переименования папки...");
+
+    const prompt = `Ты анализируешь текст саммари (краткого содержания) встречи. Твоя задача — извлечь:
+1. Количество уникальных спикеров, упомянутых или подразумеваемых.
+2. Имена ключевых спикеров (если их меньше 5, например, ["Павел", "Ксения"]). Если имена не упоминались напрямую, укажи пустой список.
+3. Краткую суть/тему разговора (максимум 4-5 слов на русском, например: "разработка телеграм бота", "оптимизация бизнес процессов").
+Верни результат СТРОГО в формате JSON с полями:
+{
+  "speaker_count": number,
+  "speakers": string[],
+  "topic": string
+}`;
+
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: prompt
+                },
+                {
+                    role: "user",
+                    content: transcriptText ? transcriptText.substring(0, 12000) : "" // Ограничим длину текста для стабильности контекста
+                }
+            ],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" }
+        });
+
+        const result = JSON.parse(completion.choices[0].message.content);
+        console.log("[summarize] Метаданные встречи успешно извлечены:", result);
+        return {
+            speaker_count: typeof result.speaker_count === 'number' ? result.speaker_count : 1,
+            speakers: Array.isArray(result.speakers) ? result.speakers : [],
+            topic: typeof result.topic === 'string' ? result.topic.trim() : "тема встречи"
+        };
+    } catch (error) {
+        console.error("[summarize] Ошибка извлечения метаданных встречи:", error.message);
+        // Возвращаем фоллбэк значения при любой ошибке, чтобы не ломать основной пайплайн
+        return {
+            speaker_count: 1,
+            speakers: [],
+            topic: "встреча"
+        };
+    }
+}
+

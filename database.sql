@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
     state VARCHAR(50) DEFAULT 'IDLE',
     yandex_user VARCHAR(255),
     yandex_webdav_password VARCHAR(255), -- Пароль приложения для WebDAV
+    bot_display_name VARCHAR(100) DEFAULT 'Telemost Recorder', -- Индивидуальное имя бота
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

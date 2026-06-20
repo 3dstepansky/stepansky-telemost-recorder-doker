@@ -15,4 +15,4 @@ if [ -z "$JOIN_URL" ]; then
 fi
 
 # 2. Теперь запускаем полноценный процесс записи для этого URL
-/bin/bash ./run_join.sh "$JOIN_URL" "$TITLE" "$CHAT_ID"
+/bin/bash ./run_join.sh "$JOIN_URL" "$CHAT_ID" "" "$TITLE"

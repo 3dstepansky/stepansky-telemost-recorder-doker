@@ -1,0 +1,17 @@
+{
+  "integration": "speckit",
+  "version": "0.10.1.dev0",
+  "installed_at": "2026-06-20T07:14:52.450901+00:00",
+  "files": {
+    ".specify/scripts/powershell/check-prerequisites.ps1": "9ee549823b6f00c2906fb3fa33a874641425e1ae656a956b8b0ee5553d1a1c77",
+    ".specify/scripts/powershell/common.ps1": "3846917aff1e3fc68993c7e39b11fd230bea48d9705b920d1970b6a564507f98",
+    ".specify/scripts/powershell/create-new-feature.ps1": "1cd5b716e56c1df148cc1c690bff862a2576a42269380c0c61446b0f1dd5172d",
+    ".specify/scripts/powershell/setup-plan.ps1": "d55b161c13b1a83d10035d2601255698aed6c3a629a44bf0bfa3299c7b42729d",
+    ".specify/scripts/powershell/setup-tasks.ps1": "c704de13a9ddca10365e91a5d748c77f06354b4cda6c7020577fda5c51561eb6",
+    ".specify/templates/checklist-template.md": "aa1effa929b8cda56ad2f96efdbbc9f5e2888a35dfa2673da2ae749620f5d234",
+    ".specify/templates/constitution-template.md": "c5da2ebe44bb130b10817b6e405bb25c942ee7bd829ec79a915d41814f2e35ed",
+    ".specify/templates/plan-template.md": "c6addc6c22567cafb03d33d01cee5f2dacdf6591ea6cc2fe847331f40b0fa8e8",
+    ".specify/templates/spec-template.md": "2be2c3adb7a907369207ca77883c2f14f1bf69615d1dadfbb30af09851d3c1bb",
+    ".specify/templates/tasks-template.md": "58bb9a9f985f44ca6c48b78903de4b6c819ae800fc57fe2433e05aa90848b807"
+  }
+}

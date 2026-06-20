@@ -52,7 +52,18 @@ async function main() {
         
         const hostFilePath = audioFile.replace("/app", HOST_ROOT_PATH);
 
-        // 1. Сначала уведомляем n8n (чтобы транскрибация пошла сразу)
+        // 1. Сначала пробуем загрузить в S3 (если настроено), чтобы избежать Race Condition с удалением локального файла при транскрибации
+        if (process.env.S3_BUCKET && existsSync(audioFile)) {
+            console.log("[step 4] Выгрузка в S3...");
+            try {
+                await uploadToS3(audioFile, process.env.S3_BUCKET, `audio/${timestamp}_meeting.webm`);
+                console.log("[s3] Файл успешно загружен в S3.");
+            } catch (e) {
+                console.error("[s3] Ошибка выгрузки в S3:", e.message);
+            }
+        }
+
+        // 2. Затем уведомляем n8n (чтобы запустить транскрибацию)
         if (process.env.N8N_WEBHOOK_URL) {
             try {
                 await axios.post(process.env.N8N_WEBHOOK_URL, {
@@ -63,17 +74,6 @@ async function main() {
                 console.log("[system] Отчет отправлен в n8n.");
             } catch (e) {
                 console.error("[error] Ошибка отправки вебхука:", e.message);
-            }
-        }
-
-        // 2. Затем пробуем в S3
-        if (process.env.S3_BUCKET && existsSync(audioFile)) {
-            console.log("[step 4] Выгрузка в S3...");
-            try {
-                await uploadToS3(audioFile, process.env.S3_BUCKET, `audio/${timestamp}_meeting.webm`);
-                console.log("[s3] Файл успешно загружен в S3.");
-            } catch (e) {
-                console.error("[s3] Ошибка выгрузки в S3:", e.message);
             }
         }
 
