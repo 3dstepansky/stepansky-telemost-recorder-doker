@@ -1,7 +1,7 @@
 -- SQL-скрипт для создания таблицы в базе данных Postgres / Supabase
 -- Запустите этот скрипт в панели SQL-запросов вашей СУБД или через n8n.
 
-CREATE TABLE IF NOT EXISTS public.meeting_transcripts (
+CREATE TABLE IF NOT EXISTS public.telemost_meeting_transcripts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
     file_path TEXT NOT NULL, -- Относительный путь к аудиофайлу на Яндекс.Диске
@@ -16,15 +16,15 @@ CREATE TABLE IF NOT EXISTS public.meeting_transcripts (
 );
 
 -- Создаем индекс для быстрого поиска встреч по Chat ID
-CREATE INDEX IF NOT EXISTS idx_meeting_transcripts_chat_id 
-ON public.meeting_transcripts(chat_id);
+CREATE INDEX IF NOT EXISTS idx_telemost_meeting_transcripts_chat_id 
+ON public.telemost_meeting_transcripts(chat_id);
 
 -- Создаем индекс для уникального идентификатора операции (предотвращение дублирования записей)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_transcripts_operation_id 
-ON public.meeting_transcripts(operation_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telemost_meeting_transcripts_operation_id 
+ON public.telemost_meeting_transcripts(operation_id);
 
 -- Таблица для хранения индивидуальных настроек пользователей (Яндекс.Диск WebDAV)
-CREATE TABLE IF NOT EXISTS public.user_settings (
+CREATE TABLE IF NOT EXISTS public.telemost_user_settings (
     chat_id VARCHAR(100) PRIMARY KEY,
     state VARCHAR(50) DEFAULT 'IDLE',
     yandex_user VARCHAR(255),
