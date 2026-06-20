@@ -393,7 +393,7 @@
     {
       "parameters": {
         "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
-        "text": "✅ Запрос на запись отправлен!\nБот-Ассистент подключается к комнате Яндекс.Телемоста.\n\nЗапись началась 🔴",
+        "text": "🔴 <b>ЗАПИСЬ ЗАПУЩЕНА</b>\n━━━━━━━━━━━━━━━━━━━━━━\n⏳ <i>Бот успешно подключился к комнате и ведет запись.</i>\n\n<b>Детали сессии:</b>\n├ 🆔 ID встречи: <code>{{ $json.meeting_id }}</code>\n├ 👤 Имя в комнате: <b>{{ $json.bot_name || 'Бот-Ассистент' }}</b>\n└ 📅 Запущено в: <code>{{ new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }) }}</code>\n\nВы можете в любой момент остановить запись, нажав на кнопку ниже.",
         "replyMarkup": "inlineKeyboard",
         "inlineKeyboard": {
           "rows": [
@@ -412,7 +412,8 @@
           ]
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "notify-start-success-node",
@@ -434,10 +435,10 @@
     {
       "parameters": {
         "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
-        "text": "=❌ Ошибка при старте записи:\n`{{ $json.error || $json.message }}`",
+        "text": "=❌ <b>ОШИБКА ПОДКЛЮЧЕНИЯ</b>\n━━━━━━━━━━━━━━━━━━━━━━\nНе удалось запустить запись встречи.\n\n⚠️ <b>Детали ошибки:</b>\n<code>{{ $json.error || $json.message }}</code>\n\n<i>Пожалуйста, проверьте корректность ссылки или статус сервера рекордера.</i>",
         "additionalFields": {
           "appendAttribution": false,
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "notify-start-error-node",
@@ -459,9 +460,9 @@
     {
       "parameters": {
         "chatId": "={{ $('TelegramTrigger').item.json.callback_query.message.chat.id }}",
-        "text": "=❌ Ошибка при остановке записи:\n`{{ $json.error || $json.message }}`",
+        "text": "=❌ <b>ОШИБКА ОСТАНОВКИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\nНе удалось остановить запись встречи.\n\n⚠️ <b>Детали ошибки:</b>\n<code>{{ $json.error || $json.message }}</code>",
         "additionalFields": {
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "notify-stop-error-node",
@@ -506,9 +507,9 @@
     {
       "parameters": {
         "chatId": "={{ $('NotifyTranscribeStart').first().json.chatId }}",
-        "text": "=✅ Транскрибация завершена!\n\n📋 *{{ $('TranscribeLocal').first().json.title }}*\n👤 Спикеров: {{ $('TranscribeLocal').first().json.speaker_count }}\n💬 Реплик: {{ $('TranscribeLocal').first().json.utterance_count }}\n🔗 Файл на Яндекс.Диске: `{{ $('TranscribeLocal').first().json.file_path }}`\n\n📝 Текст:\n{{ $('TranscribeLocal').first().json.transcript.substring(0, 2000) }}{{ $('TranscribeLocal').first().json.transcript.length > 2000 ? '\\n\\n...(полный текст сохранен в Яндекс.Диск и Supabase)' : '' }}",
+        "text": "=📝 <b>ТРАНСКРИБАЦИЯ ЗАВЕРШЕНА</b>\n━━━━━━━━━━━━━━━━━━━━━━\n✅ Расшифровка разговора готова!\n\n<b>Детали встречи:</b>\n├ 📋 Встреча: <b>{{ $('TranscribeLocal').first().json.title }}</b>\n├ 👥 Количество спикеров: <code>{{ $('TranscribeLocal').first().json.speaker_count }}</code>\n├ 💬 Всего реплик: <code>{{ $('TranscribeLocal').first().json.utterance_count }}</code>\n└ 📂 Файл на Яндекс.Диске: <code>{{ $('TranscribeLocal').first().json.file_path }}</code>\n\n📖 <b>Фрагмент расшифровки:</b>\n<pre>{{ $('TranscribeLocal').first().json.transcript.substring(0, 1500) }}{{ $('TranscribeLocal').first().json.transcript.length > 1500 ? '\\n\\n...(полный текст сохранен в файл)' : '' }}</pre>",
         "additionalFields": {
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "send-transcript-success-node",
@@ -550,7 +551,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nif (items.length === 0) {\n  return [{ json: { text: \"В базе данных пока нет сохраненных встреч.\" } }];\n}\nlet text = \"📂 *Последние записанные встречи (до 5 шт):*\\n\\n\";\nitems.forEach((item, index) => {\n  const date = new Date(item.json.transcribed_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n  text += `${index + 1}. 📋 *${item.json.title}*\\n   🕐 ${date}\\n\\n`;\n});\nreturn [{ json: { text } }];"
+        "jsCode": "const items = $input.all();\nif (items.length === 0) {\n  return [{ json: { text: \"📂 <b>ПОСЛЕДНИЕ ВСТРЕЧИ</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nВ базе данных пока нет сохраненных встреч.\" } }];\n}\nlet text = \"📂 <b>ПОСЛЕДНИЕ ВСТРЕЧИ</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\n\\n\";\nitems.forEach((item, index) => {\n  const date = new Date(item.json.transcribed_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n  text += `<b>${index + 1}. 📋 ${item.json.title}</b>\\n`;\n  text += `├ 📅 Дата: <code>${date}</code>\\n`;\n  text += `└ 📂 Путь: <code>${item.json.file_path}</code>\\n\\n`;\n});\nreturn [{ json: { text } }];"
       },
       "id": "format-meetings-list-node",
       "name": "FormatMeetingsList",
@@ -566,7 +567,7 @@
         "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
         "text": "={{ $json.text }}",
         "additionalFields": {
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "send-meetings-list-node",
@@ -588,14 +589,14 @@
     {
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
-        "text": "={{ '👤 Отображаемое имя бота в Яндекс.Телемосте сейчас: *' + ($('GetMeetingbotName1').first().json.bot_display_name || 'Бот-Ассистент') + '*\\n\\nОтправьте новое имя в ответ на это сообщение.' }}",
+        "text": "={{ '⚙️ <b>ОТОБРАЖАЕМОЕ ИМЯ БОТА</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nВы можете изменить имя, под которым бот-ассистент заходит в комнату Яндекс.Телемоста.\\n\\n👤 <b>Текущее имя бота:</b> <b>' + ($('GetMeetingbotName1').first().json.bot_display_name || 'Бот-Ассистент') + '</b>\\n\\n<i>Отправьте новое отображаемое имя в ответ на это сообщение.</i>' }}",
         "replyMarkup": "forceReply",
         "forceReply": {
           "force_reply": true
         },
         "additionalFields": {
           "appendAttribution": false,
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "send-name-help-node",
@@ -616,8 +617,8 @@
     },
     {
       "parameters": {
-        "chatId": "👋 Привет! Я — Бот-Ассистент для записи встреч Яндекс.Телемост.\\nЯ умею:\\n• 🔴 Подключаться к встрече и записывать аудио\\n• 📝 Транскрибировать запись в текст\\n• 💡 Генерировать саммари встречи\\n• ☁️ Сохранять всё на Яндекс.Диск\\nВыберите действие в меню ниже 👇",
-        "text": "👋 Привет! Я — Бот-Ассистент для записи встреч Яндекс.Телемост.\nЯ умею:\n• 🔴 Подключаться к встрече и записывать аудио\n• 📝 Транскрибировать запись в текст\n• 💡 Генерировать саммари встречи\n• ☁️ Сохранять всё на Яндекс.Диск\nВыберите действие в меню ниже 👇",
+        "chatId": "={{ (($json.message || {}).chat || {}).id || ((($json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • Главное меню\n━━━━━━━━━━━━━━━━━━━━━━\nПриветствуем! Я ваш персональный ассистент для автоматической записи и аналитики онлайн-встреч в Яндекс.Телемост.\n\n<b>Основные возможности:</b>\n🔹 <b>🔴 Запись встреч:</b> Подключение к комнате, запись звука и видео.\n🔹 <b>🧠 Аналитика и ИИ:</b> Полная расшифровка и интеллектуальное саммари.\n🔹 <b>☁️ Интеграция:</b> Автосохранение записей на ваш Яндекс.Диск.\n\nВыберите нужный раздел ниже 👇",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -655,7 +656,8 @@
           "resize_keyboard": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "b39b41b7-55fa-458c-9fb9-a29cbd1621e7",
@@ -677,14 +679,15 @@
     {
       "parameters": {
         "chatId": "={{ (($json.message || {}).chat || {}).id || ((($json.callback_query || {}).message || {}).chat || {}).id }}",
-        "text": "🔴 Запись встреч Яндекс.Телемост\n\nПожалуйста, отправьте ссылку на встречу в чат (в формате https://telemost.yandex.ru/j/...).\n\nПосле этого бот автоматически подключится к встрече и начнет запись.",
+        "text": "🤖 <b>Телемост Рекордер</b> • Запись встреч\n━━━━━━━━━━━━━━━━━━━━━━\nПожалуйста, отправьте ссылку на встречу в чат.\n\n<b>Формат ссылки:</b>\n<code>https://telemost.yandex.ru/j/XXXXXXXXXXXXXX</code>\n\n<i>После отправки бот автоматически подключится к встрече, проведет запись и запустит обработку.</i>",
         "replyMarkup": "forceReply",
         "forceReply": {
           "force_reply": true,
-          "selective": false
+          "selective": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "859d0b6b-452e-44e6-9810-81687d2a9a1f",
@@ -706,7 +709,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
-        "text": "🧠 Интеллектуальный ИИ-ассистент встреч:",
+        "text": "🧠 <b>ИИ И АНАЛИТИКА ВСТРЕЧ</b>\n━━━━━━━━━━━━━━━━━━━━━━\nЗдесь вы можете управлять ИИ-инструментами обработки ваших записей.\n\n📖 Выберите действие на клавиатуре ниже, чтобы просмотреть историю встреч, запросить расшифровку или сгенерировать краткое содержание (саммари).",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -744,7 +747,8 @@
           "resize_keyboard": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "f0d3e569-165b-48c9-9de9-bbe355be6d0b",
@@ -766,7 +770,7 @@
     {
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
-        "text": "⚙️ Настройки бота рекордера:",
+        "text": "⚙️ <b>НАСТРОЙКИ РЕКОРДЕРА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nУправление параметрами и интеграциями бота:\n\n👤 <b>Имя бота:</b> Настройка отображаемого имени на встречах.\n🗂 <b>Яндекс.Диск:</b> Управление авторизацией и папками сохранения.",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -800,7 +804,8 @@
           "resize_keyboard": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "e49bf6df-cba3-433f-b6b2-52532dcb8898",
@@ -868,14 +873,14 @@
     {
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
-        "text": "={{ '✅ Имя бота обновлено!\\n\\nТеперь при входе в Яндекс.Телемост бот будет отображаться как: *' + ($('PutMeetingbotName').first().json.bot_display_name || $('TelegramTrigger').first().json.message.text) + '*' }}",
+        "text": "={{ '✅ <b>ИМЯ БОТА ИЗМЕНЕНО</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nНовое имя успешно сохранено в профиле.\\n\\n👤 Теперь при входе на встречу бот будет отображаться как:\\n👉 <b>' + ($('PutMeetingbotName').first().json.bot_display_name || $('TelegramTrigger').first().json.message.text) + '</b>' }}",
         "replyMarkup": "forceReply",
         "forceReply": {
           "force_reply": true
         },
         "additionalFields": {
           "appendAttribution": false,
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "93e4d9e1-5520-400e-bd3b-d19e6c7f66f5",
@@ -939,7 +944,7 @@
     {
       "parameters": {
         "chatId": "={{ $('TelegramTrigger').item.json.callback_query.message.chat.id }}",
-        "text": "⏹ Запрос на остановку записи отправлен.\nБот завершает сессию и сохраняет аудиофайл в яндекс диск.\n\nОжидайте автоматическую транскрибацию...",
+        "text": "⏹ <b>ОСТАНОВКА ЗАПИСИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n⏳ <i>Запрос на остановку сессии отправлен на сервер.</i>\n\nБот завершает запись, закрывает сессию браузера и выгружает аудиофайл.\n\n🔄 <b>Текущий статус:</b> Выгрузка файла и запуск транскрибации. Ожидайте уведомления...",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -977,7 +982,8 @@
           "resize_keyboard": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "8e21f67e-31b6-46ff-8603-d3e9aa02f48f",
@@ -1067,9 +1073,10 @@
     {
       "parameters": {
         "chatId": "={{ $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id || $('WebhookTrigger').first().json.query?.chat_id }}",
-        "text": "✅ Встреча завершена. Аудио загружено на диск. Начинаю расшифровку...",
+        "text": "⏳ <b>ОБРАБОТКА ВСТРЕЧИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n☁️ Аудиофайл встречи успешно загружен на Яндекс.Диск.\n\n🎙 <b>Следующий шаг:</b> Запуск транскрибации (преобразование голоса в текст). Пожалуйста, подождите...",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "notify-transcribe-start-node",
@@ -1159,10 +1166,10 @@
     {
       "parameters": {
         "chatId": "={{ $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id }}",
-        "text": "=❌ Ошибка сервера:\n`{{ $json.error || $json.message || $json.raw }}`",
+        "text": "=❌ <b>СИСТЕМНАЯ ОШИБКА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nПроизошел сбой при обработке вашего запроса на сервере.\n\n⚠️ <b>Детали ошибки:</b>\n<code>{{ $json.error || $json.message || $json.raw }}</code>\n\n<i>Пожалуйста, попробуйте повторить операцию позже.</i>",
         "additionalFields": {
           "appendAttribution": false,
-          "parse_mode": "Markdown"
+          "parse_mode": "HTML"
         }
       },
       "id": "notify-server-error-node",
@@ -1184,13 +1191,14 @@
     {
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
-        "text": "🗂 Доступ Яндекс Диск\n\nОтправьте в ответ на это сообщение ваш Email и Пароль приложения от Яндекс.Диска через пробел.\n\nПример:\nmyemail@yandex.ru p@ssw0rd123",
+        "text": "⚙️ <b>НАСТРОЙКА ЯНДЕКС.ДИСКА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nДля автоматического сохранения аудиозаписей и транскриптов укажите данные вашего аккаунта Яндекс.\n\nℹ️ <b>Инструкция:</b>\n1. Перейдите в настройки безопасности Яндекс ID.\n2. Создайте <b>Пароль приложения</b> для сервиса «Диск».\n3. Отправьте в ответ на это сообщение ваш <b>Email</b> и <b>Пароль приложения</b> через пробел.\n\n<b>Пример ввода:</b>\n<code>username@yandex.ru app-password-here</code>",
         "replyMarkup": "forceReply",
         "forceReply": {
           "force_reply": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "send-yandex-help-node",
@@ -1232,7 +1240,7 @@
     {
       "parameters": {
         "chatId": "={{ $('TelegramTrigger').first().json.message?.chat?.id || $json.message?.chat?.id || 533234854 }}",
-        "text": "✅ Доступ к Яндекс.Диску успешно сохранен! Теперь вы можете записывать встречи.",
+        "text": "✅ <b>ИНТЕГРАЦИЯ НАСТРОЕНА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nДоступ к вашему Яндекс.Диску успешно сохранен и проверен.\n\n📂 Все новые аудиозаписи и файлы транскриптов будут сохраняться в вашу личную папку на Диске.",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -1270,7 +1278,8 @@
           "resize_keyboard": true
         },
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "9ccda8b0-3095-405a-8521-7458b3db0c39",
@@ -1325,9 +1334,10 @@
     {
       "parameters": {
         "chatId": "={{ $('WebhookTrigger').first().json.body?.chat_id || $('WebhookTrigger').first().json.chat_id }}",
-        "text": "🔔 Встреча завершилась автоматически.\nБот обнаружил, что все участники покинули комнату и завершил запись.\n\nЗагружаю аудио и начинаю расшифровку...",
+        "text": "🔔 <b>ВСТРЕЧА ЗАВЕРШЕНА АВТОМАТИЧЕСКИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n🚶‍♂️ <i>Все участники покинули комнату. Бот автоматически остановил запись для экономии ресурсов.</i>\n\n🔄 <b>Текущий статус:</b> Загрузка аудиофайла на Яндекс.Диск и отправка на транскрибацию...",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "id": "notify-auto-stopped-node",
