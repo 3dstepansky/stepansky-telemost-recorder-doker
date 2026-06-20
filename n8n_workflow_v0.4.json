@@ -121,16 +121,16 @@
                 "conditions": [
                   {
                     "id": "f1c0de8e-3449-4f07-9d4c-e9550bd87036",
-                    "leftValue": "={{ $json.message.reply_to_message.text }}",
+                    "leftValue": "={{ $json.message.text }}",
                     "operator": {
-                      "operation": "startsWith",
+                      "operation": "contains",
                       "type": "string"
                     },
-                    "rightValue": "=🔴 Запись встреч Яндекс.Телемост"
+                    "rightValue": "telemost"
                   }
                 ],
                 "options": {
-                  "caseSensitive": true,
+                  "caseSensitive": false,
                   "leftValue": "",
                   "typeValidation": "strict",
                   "version": 1
@@ -680,14 +680,27 @@
       "parameters": {
         "chatId": "={{ (($json.message || {}).chat || {}).id || ((($json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "🤖 <b>Телемост Рекордер</b> • Запись встреч\n━━━━━━━━━━━━━━━━━━━━━━\nПожалуйста, отправьте ссылку на встречу в чат.\n\n<b>Формат ссылки:</b>\n<code>https://telemost.yandex.ru/j/XXXXXXXXXXXXXX</code>\n\n<i>После отправки бот автоматически подключится к встрече, проведет запись и запустит обработку.</i>",
-        "replyMarkup": "forceReply",
-        "forceReply": {
-          "force_reply": true,
-          "selective": true
-        },
+        "replyMarkup": "replyKeyboard",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "HTML"
+        },
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔙 Назад",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
         }
       },
       "id": "859d0b6b-452e-44e6-9810-81687d2a9a1f",
