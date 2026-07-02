@@ -4,6 +4,7 @@ FROM node:20-slim
 # Установка зависимостей системных библиотек для работы Chromium в Docker
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    dumb-init \
     ffmpeg \
     fonts-liberation \
     libasound2 \
@@ -39,8 +40,11 @@ RUN npm install --production
 # Копирование остального исходного кода
 COPY . .
 
-# Создание папки для записей
-RUN mkdir -p recordings
+# Создание папок для записей и данных (persistent)
+RUN mkdir -p recordings data
+
+# Объявляем volume для персистентных данных
+VOLUME ["/app/recordings", "/app/data"]
 
 # Запуск по умолчанию (ожидается передача URL в аргументах)
-ENTRYPOINT ["node", "run.js"]
+ENTRYPOINT ["dumb-init", "--", "node", "bot.js"]

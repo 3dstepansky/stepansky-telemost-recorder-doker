@@ -1,0 +1,16 @@
+FROM node:20-slim
+
+# Создаем директорию приложения
+WORKDIR /usr/src/app
+
+# Копируем package.json и package-lock.json (если есть)
+COPY package*.json ./
+
+# Устанавливаем зависимости
+RUN npm install
+
+# Копируем исходный код
+COPY . .
+
+# По умолчанию запускаем тесты
+CMD [ "npm", "test" ]

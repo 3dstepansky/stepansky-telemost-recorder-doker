@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { resolve, join } from "path";
 import { existsSync, mkdirSync } from "fs";
 import { uploadToS3 } from "./services/s3.js";
@@ -42,7 +42,7 @@ async function main() {
         stdio: "inherit",
         env: { 
             ...process.env, 
-            MAX_IDLE_MINS: process.env.MAX_IDLE_MINS || "3",
+            MAX_IDLE_MINS: process.env.MAX_IDLE_MINS || "2",
             MAX_DURATION_MINS: process.env.MAX_DURATION_MINS || "180"
         }
     });
@@ -63,22 +63,52 @@ async function main() {
             }
         }
 
-        // 2. Затем уведомляем n8n (чтобы запустить транскрибацию)
-        if (process.env.N8N_WEBHOOK_URL) {
+        // 1.5. Ранняя выгрузка исходного аудио на Яндекс.Диск (Шаг 4 гипотезы US-16)
+        console.log("[step 4.5] Выгрузка оригинального аудио на Яндекс.Диск...");
+        let targetDirName = timestamp; // fallback
+        const meetingTitle = process.env.MEETING_TITLE || `Telemost ${timestamp}`;
+        const chatId = process.env.CHAT_ID || 'manual_launch';
+
+        const uploadResult = spawnSync("node", ["upload_audio.js", audioFile, meetingTitle, chatId], {
+            encoding: "utf-8",
+            env: process.env
+        });
+
+        if (uploadResult.status === 0) {
             try {
-                await axios.post(process.env.N8N_WEBHOOK_URL, {
-                    file: hostFilePath,
-                    title: process.env.MEETING_TITLE || `Telemost ${timestamp}`,
-                    chat_id: process.env.CHAT_ID || 'manual_launch'
-                });
-                console.log("[system] Отчет отправлен в n8n.");
-            } catch (e) {
-                console.error("[error] Ошибка отправки вебхука:", e.message);
+                const outLines = uploadResult.stdout.split('\n');
+                const jsonLine = outLines.find(l => l.trim().startsWith('{'));
+                if (jsonLine) {
+                    const parsed = JSON.parse(jsonLine);
+                    if (parsed.target_dir_name) {
+                        targetDirName = parsed.target_dir_name;
+                        console.log(`[system] Успешная ранняя выгрузка. Папка: ${targetDirName}`);
+                    }
+                }
+                if (uploadResult.stderr) {
+                    process.stderr.write(uploadResult.stderr);
+                }
+            } catch(e) {
+                console.error("[system] Ошибка парсинга вывода upload_audio.js", e);
             }
+        } else {
+            console.error("[system] Ошибка выгрузки аудио на Яндекс.Диск:");
+            console.error(uploadResult.stderr || uploadResult.stdout);
         }
 
-        console.log(`=== СЕССИЯ ЗАВЕРШЕНА ===`);
-        process.exit(0);
+        // 2. Затем локально запускаем транскрибацию (вместо n8n webhook)
+        console.log("[step 5] Запуск локальной транскрибации...");
+        const transcribeProcess = spawn("node", ["transcribe.js", audioFile, targetDirName, meetingTitle, chatId], {
+            stdio: "inherit",
+            env: process.env
+        });
+
+        transcribeProcess.on("close", (tCode) => {
+            console.log(`[system] Транскрибация завершена с кодом ${tCode}`);
+            console.log(`=== СЕССИЯ ЗАВЕРШЕНА ===`);
+            process.exit(0);
+        });
+
     });
 }
 

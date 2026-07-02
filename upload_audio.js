@@ -27,27 +27,35 @@ async function run() {
   const targetFileName = path.basename(resolvedPath);
 
   try {
-    console.error(`[system] Загрузка оригинального аудиофайла на Яндекс.Диск через WebDAV...`);
-    const relativeYandexPath = await uploadToYandexDisk(
-      resolvedPath, 
-      targetDirName, 
-      targetFileName,
-      yandexUser,
-      yandexPassword
-    );
+    try {
+      if (yandexUser && yandexPassword) {
+        console.error(`[system] Загрузка оригинального аудиофайла на Яндекс.Диск через WebDAV...`);
+        const relativeYandexPath = await uploadToYandexDisk(
+          resolvedPath, 
+          targetDirName, 
+          targetFileName,
+          yandexUser,
+          yandexPassword
+        );
+        console.error(`[system] Успешно загружено на Яндекс.Диск: ${relativeYandexPath}`);
+      }
+    } catch (e) {
+      console.error("[error] Ошибка выгрузки аудио на Яндекс.Диск:", e.message);
+      // Не прерываем выполнение (продолжаем транскрибацию)
+    }
 
     // Вывод JSON для n8n
     console.log(JSON.stringify({
       status: 'success',
       step: 'upload_audio',
-      file_path: relativeYandexPath,
+      file_path: targetFileName,
       target_dir_name: targetDirName,
       title: title,
       chat_id: chatId
     }));
 
   } catch (e) {
-    console.error("[fatal] Ошибка выгрузки аудио:", e.message);
+    console.error("[fatal] Системная ошибка в upload_audio:", e.message);
     console.log(JSON.stringify({ error: e.message }));
     process.exit(1);
   }

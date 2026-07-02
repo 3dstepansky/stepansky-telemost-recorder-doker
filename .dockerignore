@@ -1,0 +1,7 @@
+node_modules
+.git
+telemost_bot.sqlite
+recordings
+*/*.webm
+*/*.mp3
+tmp

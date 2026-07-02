@@ -16,7 +16,8 @@ import 'dotenv/config';
  */
 export async function uploadToYandexDisk(localFilePath, targetDirName, targetFileName, yandexUser, yandexPassword) {
   const username = yandexUser || process.env.YANDEX_USER;
-  const password = yandexPassword || process.env.YANDEX_WEBDAV_PASSWORD;
+  let password = yandexPassword || process.env.YANDEX_WEBDAV_PASSWORD;
+  if (password) password = password.replace(/\s/g, '');
 
   if (!username || !password) {
     throw new Error("Не заданы логин или пароль для Яндекс.Диска (передайте в функцию или укажите в .env)");
@@ -103,7 +104,8 @@ export async function uploadToYandexDisk(localFilePath, targetDirName, targetFil
  */
 export async function renameYandexDiskFolder(oldDirName, newDirName, yandexUser, yandexPassword) {
   const username = yandexUser || process.env.YANDEX_USER;
-  const password = yandexPassword || process.env.YANDEX_WEBDAV_PASSWORD;
+  let password = yandexPassword || process.env.YANDEX_WEBDAV_PASSWORD;
+  if (password) password = password.replace(/\s/g, '');
 
   if (!username || !password) {
     throw new Error("Не заданы логин или пароль для Яндекс.Диска (передайте в функцию или укажите в .env)");
@@ -136,4 +138,39 @@ export async function renameYandexDiskFolder(oldDirName, newDirName, yandexUser,
     throw error;
   }
 }
+
+/**
+ * Проверяет корректность логина и пароля для Яндекс.Диска.
+ * 
+ * @param {string} username 
+ * @param {string} password 
+ * @returns {Promise<boolean>}
+ */
+export async function checkYandexDiskConnection(username, password) {
+  if (!username || !password) return false;
+  password = password.replace(/\s/g, '');
+  
+  const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+  console.log(`[webdav-debug] Check auth for username="${username}" (pass length=${password.length})`);
+  try {
+    await axios({
+      method: 'PROPFIND',
+      url: 'https://webdav.yandex.ru/',
+      headers: {
+        'Authorization': authHeader,
+        'Depth': '0'
+      },
+      timeout: 5000
+    });
+    return true;
+  } catch (error) {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      console.log(`[webdav] Тест авторизации отклонен сервером (status: ${error.response.status})`);
+      return false;
+    }
+    console.error('[webdav] Ошибка проверки соединения:', error.message);
+    throw error;
+  }
+}
+
 

@@ -17,10 +17,14 @@ import {
 import { resolve, dirname } from "path";
 import { tmpdir } from "os";
 import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
 
 const joinUrl = process.argv[2];
+const meetingIdStr = joinUrl ? joinUrl.split('/').pop().replace(/[^a-zA-Z0-9_-]/g, '') : 'default';
+const userDataDir = resolve(tmpdir(), `puppeteer_telemost_${meetingIdStr}_${Date.now()}`);
+
 const isCreateMode = joinUrl === '--create';
 const outputFile = isCreateMode ? null : process.argv[3];
 const isHeadless = process.env.HEADLESS !== "false";
@@ -31,20 +35,36 @@ if (!joinUrl || (!isCreateMode && !outputFile)) {
 }
 
 let outputPath;
+let outputDir;
+let tracksDir;
+let metaDir;
+
 if (!isCreateMode) {
   outputPath = resolve(outputFile);
-  const outputDir = dirname(outputPath);
-  if (!existsSync(outputDir)) {
-    mkdirSync(outputDir, { recursive: true });
-  }
+  outputDir = dirname(outputPath);
+  tracksDir = resolve(outputDir, "tracks");
+  metaDir = resolve(outputDir, "meta");
+
+  if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+  if (!existsSync(tracksDir)) mkdirSync(tracksDir, { recursive: true });
+  if (!existsSync(metaDir)) mkdirSync(metaDir, { recursive: true });
+
   // Change directory permissions so host user (ubuntu) can create transcript.txt and delete files
   try { chmodSync(outputDir, 0o777); } catch(e) { console.error(e); }
+  try { chmodSync(tracksDir, 0o777); } catch(e) { console.error(e); }
+  try { chmodSync(metaDir, 0o777); } catch(e) { console.error(e); }
   
-  // Очистка старого файла
+  // Очистка старого файла микса
   writeFileSync(outputPath, "");
+  // Создание track_events.ndjson
+  writeFileSync(resolve(metaDir, "track_events.ndjson"), "");
+
   try { chmodSync(outputPath, 0o666); } catch(e) { console.error(e); }
+  try { chmodSync(resolve(metaDir, "track_events.ndjson"), 0o666); } catch(e) { console.error(e); }
+
   console.log(`[recorder] join_url: ${joinUrl}`);
   console.log(`[recorder] output:   ${outputPath}`);
+  console.log(`[recorder] tracks:   ${tracksDir}`);
 } else {
   console.log(`[recorder] Режим создания новой встречи активен.`);
 }
@@ -55,6 +75,7 @@ const BOT_NAME = rawBotName.replace(/^["'\[\(\{]+|["'\]\)\}]+$/g, '');
 
 const browser = await puppeteer.launch({
   headless: isHeadless,
+  userDataDir: userDataDir,
   handleSIGINT: false,
   handleSIGTERM: false,
   handleSIGHUP: false,
@@ -78,17 +99,44 @@ await page.setUserAgent(
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 );
 
-// Функция для получения чанков аудио из браузера
+// Функция для получения чанков аудио из браузера (микс)
 await page.exposeFunction("__saveAudioChunk", (base64data) => {
   const buffer = Buffer.from(base64data, "base64");
   appendFileSync(outputPath, buffer);
 });
 
-// МОНКИ-ПАТЧИНГ WebRTC (Ядро из 3dstepansky)
+// Сохранение чанков для конкретного трека
+await page.exposeFunction("__saveTrackChunk", (trackId, base64data) => {
+  const buffer = Buffer.from(base64data, "base64");
+  const trackPath = resolve(tracksDir, `${trackId}.webm`);
+  if (!existsSync(trackPath)) {
+    writeFileSync(trackPath, "");
+    try { chmodSync(trackPath, 0o666); } catch(e) {}
+  }
+  appendFileSync(trackPath, buffer);
+});
+
+// Запись события (например, речь)
+await page.exposeFunction("__logTrackEvent", (eventObj) => {
+  const eventLine = JSON.stringify(eventObj) + "\n";
+  appendFileSync(resolve(metaDir, "track_events.ndjson"), eventLine);
+});
+
+// Сохранение summary при закрытии
+await page.exposeFunction("__saveTracksSummary", (summaryObj) => {
+  const summaryPath = resolve(metaDir, "tracks_summary.json");
+  writeFileSync(summaryPath, JSON.stringify(summaryObj, null, 2));
+});
+
+// МОНКИ-ПАТЧИНГ WebRTC (Dual-Output: микс + отдельные треки + AnalyserNode)
 await page.evaluateOnNewDocument(() => {
   const originalRTCPeerConnection = window.RTCPeerConnection;
   const allRemoteTracks = [];
-  let recorderStarted = false;
+  const activeRecorders = new Map(); // track.id -> MediaRecorder
+  let mixRecorderStarted = false;
+  let mixAudioContext = null;
+  let mixDestination = null;
+  let mixRecorder = null;
 
   window.RTCPeerConnection = function (...args) {
     const peerConnection = new originalRTCPeerConnection(...args);
@@ -97,7 +145,12 @@ await page.evaluateOnNewDocument(() => {
       if (event.track.kind === "audio") {
         console.log("[recorder-inject] Получен аудио-трек:", event.track.id);
         allRemoteTracks.push(event.track);
-        tryStartRecorder();
+
+        // 1. Обновляем микс
+        tryStartMixRecorder();
+        
+        // 2. Запускаем индивидуальный трекинг
+        startTrackRecording(event.track);
       }
     });
 
@@ -109,20 +162,29 @@ await page.evaluateOnNewDocument(() => {
     window.RTCPeerConnection[key] = originalRTCPeerConnection[key];
   });
 
-  function tryStartRecorder() {
-    if (recorderStarted || allRemoteTracks.length === 0) return;
-    recorderStarted = true;
+  function getSpeakerName() {
+    // Пока упрощенный поиск. В будущем можно усложнить
+    return "unknown";
+  }
 
-    const audioContext = new AudioContext();
-    const destination = audioContext.createMediaStreamDestination();
+  function startTrackRecording(track) {
+    if (activeRecorders.has(track.id)) return;
 
-    for (const track of allRemoteTracks) {
-      const stream = new MediaStream([track]);
-      const source = audioContext.createMediaStreamSource(stream);
-      source.connect(destination);
-    }
+    window.__logTrackEvent({
+      ts: new Date().toISOString(),
+      type: "track-added",
+      trackId: track.id,
+      speakerName: getSpeakerName(),
+      kind: track.kind,
+      label: track.label,
+      muted: track.muted,
+      readyState: track.readyState
+    });
 
-    const recorder = new MediaRecorder(destination.stream, {
+    const stream = new MediaStream([track]);
+    
+    // Рекордер для отдельного трека
+    const recorder = new MediaRecorder(stream, {
       mimeType: "audio/webm;codecs=opus",
       audioBitsPerSecond: 32000,
     });
@@ -131,19 +193,135 @@ await page.evaluateOnNewDocument(() => {
       if (event.data.size > 0) {
         const arrayBuffer = await event.data.arrayBuffer();
         const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-        window.__saveAudioChunk(base64);
+        window.__saveTrackChunk(track.id, base64);
       }
     };
 
-    recorder.start(2000); // Чанки по 2 сек
-    console.log("[recorder-inject] MediaRecorder запущен");
+    recorder.start(2000);
+    
+    // Анализатор амплитуды для VAD (Voice Activity Detection)
+    const audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
 
-    window.__stopRecorder = () => {
-      recorder.stop();
-      audioContext.close();
-      console.log("[recorder-inject] MediaRecorder остановлен");
-    };
+    const dataArray = new Float32Array(analyser.fftSize);
+    let speaking = false;
+    let speakingStart = 0;
+    let maxAmplitude = 0;
+    
+    const startTime = Date.now();
+    
+    const intervalId = setInterval(() => {
+      analyser.getFloatTimeDomainData(dataArray);
+      let peak = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        if (Math.abs(dataArray[i]) > peak) peak = Math.abs(dataArray[i]);
+      }
+      
+      const threshold = 0.005; 
+      
+      if (peak > threshold) {
+        if (!speaking) {
+          speaking = true;
+          speakingStart = Date.now();
+          maxAmplitude = peak;
+        } else {
+          if (peak > maxAmplitude) maxAmplitude = peak;
+        }
+      } else {
+        if (speaking) {
+          speaking = false;
+          const duration = Date.now() - speakingStart;
+          if (duration > 300) { 
+            window.__logTrackEvent({
+              ts: new Date().toISOString(),
+              type: "speech-segment",
+              trackId: track.id,
+              speakerName: getSpeakerName(),
+              start_ms: speakingStart - startTime,
+              end_ms: Date.now() - startTime,
+              amplitude_peak: parseFloat(maxAmplitude.toFixed(4))
+            });
+          }
+        }
+      }
+    }, 100);
+
+    activeRecorders.set(track.id, {
+      recorder,
+      audioContext,
+      intervalId,
+      track
+    });
+    
+    console.log(`[recorder-inject] Начата запись трека ${track.id}`);
   }
+
+  function tryStartMixRecorder() {
+    if (!mixAudioContext) {
+      mixAudioContext = new AudioContext();
+      mixDestination = mixAudioContext.createMediaStreamDestination();
+    }
+
+    // Подключаем только новые треки
+    const newTracks = allRemoteTracks.filter(t => !t._mixed);
+    for (const track of newTracks) {
+      const stream = new MediaStream([track]);
+      const source = mixAudioContext.createMediaStreamSource(stream);
+      source.connect(mixDestination);
+      track._mixed = true;
+    }
+
+    if (!mixRecorderStarted && allRemoteTracks.length > 0) {
+      mixRecorderStarted = true;
+      mixRecorder = new MediaRecorder(mixDestination.stream, {
+        mimeType: "audio/webm;codecs=opus",
+        audioBitsPerSecond: 32000,
+      });
+
+      mixRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0) {
+          const arrayBuffer = await event.data.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          window.__saveAudioChunk(base64);
+        }
+      };
+
+      mixRecorder.start(2000);
+      console.log("[recorder-inject] Mix MediaRecorder запущен");
+    }
+  }
+
+  window.__stopRecorder = () => {
+    // 1. Остановка микса
+    if (mixRecorder && mixRecorder.state !== "inactive") {
+      mixRecorder.stop();
+    }
+    if (mixAudioContext) mixAudioContext.close();
+
+    // 2. Остановка отдельных треков
+    const summary = {
+      tracks: []
+    };
+
+    for (const [trackId, data] of activeRecorders.entries()) {
+      clearInterval(data.intervalId);
+      if (data.recorder.state !== "inactive") {
+        data.recorder.stop();
+      }
+      data.audioContext.close();
+      summary.tracks.push({
+        trackId: trackId,
+        label: data.track.label,
+        speakerName: getSpeakerName()
+      });
+    }
+
+    window.__saveTracksSummary(summary);
+    console.log("[recorder-inject] Все MediaRecorder остановлены, summary сохранен");
+  };
 });
 
 // ПЕРЕХОД ПО ССЫЛКЕ
@@ -235,7 +413,7 @@ try {
   }
 
   // --- МОНИТОР ПРИСУТСТВИЯ ---
-  const MAX_IDLE_MINS = parseInt(process.env.MAX_IDLE_MINS || "3");
+  const MAX_IDLE_MINS = parseInt(process.env.MAX_IDLE_MINS || "2");
   const MAX_DURATION_MINS = parseInt(process.env.MAX_DURATION_MINS || "180");
   let idleSeconds = 0;
   let totalSeconds = 0;
@@ -265,8 +443,33 @@ try {
       } else {
           idleSeconds = 0;
       }
+      
+      // Check for stop lock file
+      const lockFile = resolve(`stop_${meetingIdStr}`);
+      if (fs.existsSync(lockFile)) {
+          console.log("[monitor] Найден файл остановки. Завершаем...");
+          fs.unlinkSync(lockFile);
+          break;
+      }
+      
+      const isMeetingEnded = await page.evaluate(() => {
+          return document.body.innerText.includes("Встреча завершена") || 
+                 document.body.innerText.includes("Оцените качество") ||
+                 !window.location.href.includes("/j/");
+      });
+
+      if (isMeetingEnded) {
+          console.log("[monitor] Встреча завершена организатором. Выходим.");
+          break;
+      }
+      
     } catch (e) {
       console.error("[monitor] Ошибка проверки участников:", e.message);
+      // Если контекст уничтожен (страница закрылась/редирект), выходим
+      if (e.message.includes("Execution context was destroyed") || e.message.includes("Session closed")) {
+          console.log("[monitor] Страница закрыта или перенаправлена. Выходим.");
+          break;
+      }
     }
   }
 
@@ -277,6 +480,14 @@ try {
 } finally {
   console.log("[system] Финальное закрытие браузера...");
   if (browser) await browser.close();
+  try {
+      if (fs.existsSync(userDataDir)) {
+          fs.rmSync(userDataDir, { recursive: true, force: true });
+          console.log("[system] Временная папка профиля удалена.");
+      }
+  } catch(e) {
+      console.error("[error] Ошибка удаления userDataDir:", e.message);
+  }
   process.exit(0);
 }
 

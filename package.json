@@ -6,17 +6,22 @@
   "description": "Zero Cost Yandex.Telemost Recorder (Guest Mode)",
   "main": "run.js",
   "scripts": {
-    "start": "node run.js",
+    "start": "node bot.js",
     "record": "node recorder.js",
-    "transcribe": "node transcribe.js"
+    "transcribe": "node transcribe.js",
+    "track-probe": "node scratch/test_webrtc_tracks.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.500.0",
     "assemblyai": "^4.35.0",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5",
+    "form-data": "^4.0.6",
     "groq-sdk": "^1.2.1",
     "mkdirp": "^3.0.1",
-    "puppeteer": "^24.0.0"
+    "puppeteer": "^24.0.0",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3"
   }
 }

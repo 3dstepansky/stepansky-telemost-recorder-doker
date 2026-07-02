@@ -25,8 +25,8 @@ export async function transcribeAudioAssemblyAI(filePath) {
     const params = {
         audio: filePath,
         speech_models: ["universal-3-pro", "universal-2"],
+        language_detection: true,
         speaker_labels: true,
-        language_code: "ru"
     };
 
     try {

@@ -8,3 +8,9 @@ yarn-error.log*
 .DS_Store
 .vscode/
 scratch/
+data/
+*.sqlite
+*.mp3
+*.txt
+*.ndjson
+*.webm

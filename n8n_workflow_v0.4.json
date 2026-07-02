@@ -49,7 +49,7 @@
                 "conditions": [
                   {
                     "id": "2d4ac39f-dbb8-4d08-bb7b-95795115eddc",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
@@ -69,16 +69,31 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "7b8e2f11-533f-4f36-9442-7d1daa5903e1",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "🔙 Назад"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/back"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/menu"
                   }
                 ],
                 "options": {
@@ -93,16 +108,23 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "27aa6cc1-0196-4739-8fbc-14c1f05de7a1",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "🔴 Запись встреч"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/record"
                   }
                 ],
                 "options": {
@@ -121,7 +143,7 @@
                 "conditions": [
                   {
                     "id": "f1c0de8e-3449-4f07-9d4c-e9550bd87036",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text || ($json.message || {}).caption || '' }}",
                     "operator": {
                       "operation": "contains",
                       "type": "string"
@@ -141,16 +163,23 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "d10388d7-5a63-4b29-aff4-78261f4f638f",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "🧠 Аналитика и ИИ"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/ai"
                   }
                 ],
                 "options": {
@@ -165,16 +194,23 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "3b3ca90f-de1c-4a1e-8bcd-f53f7c282307",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "⚙️ Настройки"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/settings"
                   }
                 ],
                 "options": {
@@ -189,16 +225,23 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "a261ce48-ac48-4a52-80de-443f105280a6",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "ℹ️ Помощь"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/help"
                   }
                 ],
                 "options": {
@@ -213,16 +256,31 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "4474de03-bc6b-4a94-9363-0d64e47c85ab",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "📂 Список встреч"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/meetings"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/list"
                   }
                 ],
                 "options": {
@@ -241,7 +299,7 @@
                 "conditions": [
                   {
                     "id": "8c7525e9-754e-4421-9d78-322ca2b06875",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
@@ -265,12 +323,12 @@
                 "conditions": [
                   {
                     "id": "11ad8f49-ed62-414d-a2c2-38bad6b8473f",
-                    "leftValue": "={{ $json.message.reply_to_message.text }}",
+                    "leftValue": "={{ (($json.message || {}).reply_to_message || {}).text }}",
                     "operator": {
                       "operation": "startsWith",
                       "type": "string"
                     },
-                    "rightValue": "👤 Отображаемое имя бота"
+                    "rightValue": "⚙️ ОТОБРАЖАЕМОЕ ИМЯ БОТА"
                   }
                 ],
                 "options": {
@@ -285,16 +343,23 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "id": "5d8b4ee2-2373-4d7b-af88-3761b219670e",
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
                     "rightValue": "👤 Имя бота"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/name"
                   }
                 ],
                 "options": {
@@ -313,7 +378,7 @@
                 "conditions": [
                   {
                     "id": "ac6f71fd-ada9-41cb-8020-8b791912c40f",
-                    "leftValue": "={{ $json.callback_query.message.reply_markup.inline_keyboard[0][0].callback_data }}",
+                    "leftValue": "={{ (((($json.callback_query || {}).message || {}).reply_markup || {}).inline_keyboard || [[{}]])[0][0].callback_data || '' }}",
                     "operator": {
                       "operation": "startsWith",
                       "type": "string"
@@ -333,15 +398,23 @@
             },
             {
               "conditions": {
-                "combinator": "and",
+                "combinator": "or",
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.message.text }}",
+                    "leftValue": "={{ ($json.message || {}).text }}",
                     "operator": {
                       "operation": "equals",
                       "type": "string"
                     },
-                    "rightValue": "🗂 Настройка Яндекс Диска"
+                    "rightValue": "📦 Настройка Яндекс Диска"
+                  },
+                  {
+                    "leftValue": "={{ ($json.message || {}).text }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "/yandex"
                   }
                 ],
                 "options": {
@@ -352,19 +425,19 @@
                 }
               },
               "renameOutput": true,
-              "outputKey": "🗂 Настройка Яндекс Диска"
+              "outputKey": "📦 Настройка Яндекс Диска"
             },
             {
               "conditions": {
                 "combinator": "and",
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.message.reply_to_message.text }}",
+                    "leftValue": "={{ (($json.message || {}).reply_to_message || {}).text }}",
                     "operator": {
                       "operation": "startsWith",
                       "type": "string"
                     },
-                    "rightValue": "🗂 Доступ Яндекс Диск"
+                    "rightValue": "⚙️ НАСТРОЙКА ЯНДЕКС.ДИСКА"
                   }
                 ],
                 "options": {
@@ -375,10 +448,34 @@
                 }
               },
               "renameOutput": true,
-              "outputKey": "🗂 Доступ Яндекс Диск"
+              "outputKey": "📦 Доступ Яндекс Диск"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ !!(($json.message || {}).text || ($json.message || {}).caption) }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "boolean"
+                    },
+                    "rightValue": true
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "неопознанная команда"
             }
           ]
         },
+        "fallbackOutput": "extra",
         "options": {}
       },
       "id": "route-command-node",
@@ -392,7 +489,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "🔴 <b>ЗАПИСЬ ЗАПУЩЕНА</b>\n━━━━━━━━━━━━━━━━━━━━━━\n⏳ <i>Бот успешно подключился к комнате и ведет запись.</i>\n\n<b>Детали сессии:</b>\n├ 🆔 ID встречи: <code>{{ $json.meeting_id }}</code>\n├ 👤 Имя в комнате: <b>{{ $json.bot_name || 'Бот-Ассистент' }}</b>\n└ 📅 Запущено в: <code>{{ new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }) }}</code>\n\nВы можете в любой момент остановить запись, нажав на кнопку ниже.",
         "replyMarkup": "inlineKeyboard",
         "inlineKeyboard": {
@@ -434,7 +531,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "=❌ <b>ОШИБКА ПОДКЛЮЧЕНИЯ</b>\n━━━━━━━━━━━━━━━━━━━━━━\nНе удалось запустить запись встречи.\n\n⚠️ <b>Детали ошибки:</b>\n<code>{{ $json.error || $json.message }}</code>\n\n<i>Пожалуйста, проверьте корректность ссылки или статус сервера рекордера.</i>",
         "additionalFields": {
           "appendAttribution": false,
@@ -459,10 +556,11 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('TelegramTrigger').item.json.callback_query.message.chat.id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "=❌ <b>ОШИБКА ОСТАНОВКИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\nНе удалось остановить запись встречи.\n\n⚠️ <b>Детали ошибки:</b>\n<code>{{ $json.error || $json.message }}</code>",
         "additionalFields": {
-          "parse_mode": "HTML"
+          "parse_mode": "HTML",
+          "appendAttribution": false
         }
       },
       "id": "notify-stop-error-node",
@@ -509,7 +607,8 @@
         "chatId": "={{ $('NotifyTranscribeStart').first().json.chatId }}",
         "text": "=📝 <b>ТРАНСКРИБАЦИЯ ЗАВЕРШЕНА</b>\n━━━━━━━━━━━━━━━━━━━━━━\n✅ Расшифровка разговора готова!\n\n<b>Детали встречи:</b>\n├ 📋 Встреча: <b>{{ $('TranscribeLocal').first().json.title }}</b>\n├ 👥 Количество спикеров: <code>{{ $('TranscribeLocal').first().json.speaker_count }}</code>\n├ 💬 Всего реплик: <code>{{ $('TranscribeLocal').first().json.utterance_count }}</code>\n└ 📂 Файл на Яндекс.Диске: <code>{{ $('TranscribeLocal').first().json.file_path }}</code>\n\n📖 <b>Фрагмент расшифровки:</b>\n<pre>{{ $('TranscribeLocal').first().json.transcript.substring(0, 1500) }}{{ $('TranscribeLocal').first().json.transcript.length > 1500 ? '\\n\\n...(полный текст сохранен в файл)' : '' }}</pre>",
         "additionalFields": {
-          "parse_mode": "HTML"
+          "parse_mode": "HTML",
+          "appendAttribution": false
         }
       },
       "id": "send-transcript-success-node",
@@ -531,7 +630,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT title, transcribed_at FROM public.telemost_meeting_transcripts ORDER BY transcribed_at DESC LIMIT 5",
+        "query": "SELECT title, transcribed_at, file_path FROM public.telemost_meeting_transcripts UNION ALL SELECT NULL as title, NULL as transcribed_at, NULL as file_path WHERE NOT EXISTS (SELECT 1 FROM public.telemost_meeting_transcripts) ORDER BY transcribed_at DESC LIMIT 5",
         "options": {}
       },
       "id": "get-meetings-db-node",
@@ -551,7 +650,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nif (items.length === 0) {\n  return [{ json: { text: \"📂 <b>ПОСЛЕДНИЕ ВСТРЕЧИ</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nВ базе данных пока нет сохраненных встреч.\" } }];\n}\nlet text = \"📂 <b>ПОСЛЕДНИЕ ВСТРЕЧИ</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\n\\n\";\nitems.forEach((item, index) => {\n  const date = new Date(item.json.transcribed_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n  text += `<b>${index + 1}. 📋 ${item.json.title}</b>\\n`;\n  text += `├ 📅 Дата: <code>${date}</code>\\n`;\n  text += `└ 📂 Путь: <code>${item.json.file_path}</code>\\n\\n`;\n});\nreturn [{ json: { text } }];"
+        "jsCode": "const items = $input.all();\nif (items.length === 0 || items[0].json.title === null) {\n  return [{ json: { text: \"📂 <b>ПОСЛЕДНИЕ ВСТРЕЧИ</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nВ базе данных пока нет сохраненных встреч.\" } }];\n}\nlet text = \"📂 <b>ПОСЛЕДНИЕ ВСТРЕЧИ</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\n\\n\";\nitems.forEach((item, index) => {\n  const date = new Date(item.json.transcribed_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });\n  text += `<b>${index + 1}. 📋 ${item.json.title}</b>\\n`;\n  text += `├ 📅 Дата: <code>${date}</code>\\n`;\n  text += `└ 📂 Путь: <code>${item.json.file_path}</code>\\n\\n`;\n});\nreturn [{ json: { text } }];"
       },
       "id": "format-meetings-list-node",
       "name": "FormatMeetingsList",
@@ -564,10 +663,11 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('TelegramTrigger').first().json.message.chat.id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "={{ $json.text }}",
         "additionalFields": {
-          "parse_mode": "HTML"
+          "parse_mode": "HTML",
+          "appendAttribution": false
         }
       },
       "id": "send-meetings-list-node",
@@ -588,8 +688,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "={{ '⚙️ <b>ОТОБРАЖАЕМОЕ ИМЯ БОТА</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nВы можете изменить имя, под которым бот-ассистент заходит в комнату Яндекс.Телемоста.\\n\\n👤 <b>Текущее имя бота:</b> <b>' + ($('GetMeetingbotName1').first().json.bot_display_name || 'Бот-Ассистент') + '</b>\\n\\n<i>Отправьте новое отображаемое имя в ответ на это сообщение.</i>' }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "={{ '🤖 <b>Телемост Рекордер</b> • Настройка имени\\n━━━━━━━━━━━━━━━━━━━━━━\\nВы можете изменить имя, под которым бот-ассистент заходит в комнату Яндекс.Телемоста.\\n\\n👤 <b>Текущее имя бота:</b> <b>' + ($('GetMeetingbotName1').first().json.bot_display_name || 'Бот-Ассистент') + '</b>\\n\\n✍️ <b>Введите новое имя для вашего бота-помощника:</b>\\n<i>(отправьте его текстом в ответ на это сообщение)</i>' }}",
         "replyMarkup": "forceReply",
         "forceReply": {
           "force_reply": true
@@ -617,7 +717,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ (($json.message || {}).chat || {}).id || ((($json.callback_query || {}).message || {}).chat || {}).id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "🤖 <b>Телемост Рекордер</b> • Главное меню\n━━━━━━━━━━━━━━━━━━━━━━\nПриветствуем! Я ваш персональный ассистент для автоматической записи и аналитики онлайн-встреч в Яндекс.Телемост.\n\n<b>Основные возможности:</b>\n🔹 <b>🔴 Запись встреч:</b> Подключение к комнате, запись звука и видео.\n🔹 <b>🧠 Аналитика и ИИ:</b> Полная расшифровка и интеллектуальное саммари.\n🔹 <b>☁️ Интеграция:</b> Автосохранение записей на ваш Яндекс.Диск.\n\nВыберите нужный раздел ниже 👇",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
@@ -678,7 +778,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ (($json.message || {}).chat || {}).id || ((($json.callback_query || {}).message || {}).chat || {}).id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "🤖 <b>Телемост Рекордер</b> • Запись встреч\n━━━━━━━━━━━━━━━━━━━━━━\nПожалуйста, отправьте ссылку на встречу в чат.\n\n<b>Формат ссылки:</b>\n<code>https://telemost.yandex.ru/j/XXXXXXXXXXXXXX</code>\n\n<i>После отправки бот автоматически подключится к встрече, проведет запись и запустит обработку.</i>",
         "replyMarkup": "replyKeyboard",
         "additionalFields": {
@@ -721,8 +821,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "🧠 <b>ИИ И АНАЛИТИКА ВСТРЕЧ</b>\n━━━━━━━━━━━━━━━━━━━━━━\nЗдесь вы можете управлять ИИ-инструментами обработки ваших записей.\n\n📖 Выберите действие на клавиатуре ниже, чтобы просмотреть историю встреч, запросить расшифровку или сгенерировать краткое содержание (саммари).",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • ИИ и Аналитика\n━━━━━━━━━━━━━━━━━━━━━━\nЗдесь вы можете управлять ИИ-инструментами обработки ваших записей.\n\n📖 Выберите действие на клавиатуре ниже, чтобы просмотреть историю встреч, запросить расшифровку или сгенерировать краткое содержание (саммари).",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -782,8 +882,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "⚙️ <b>НАСТРОЙКИ РЕКОРДЕРА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nУправление параметрами и интеграциями бота:\n\n👤 <b>Имя бота:</b> Настройка отображаемого имени на встречах.\n🗂 <b>Яндекс.Диск:</b> Управление авторизацией и папками сохранения.",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • Настройки\n━━━━━━━━━━━━━━━━━━━━━━\nУправление параметрами и интеграциями бота:\n\n👤 <b>Имя бота:</b> Настройка отображаемого имени на встречах.\n📦 <b>Яндекс.Диск:</b> Управление авторизацией и папками сохранения.",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -795,7 +895,7 @@
                     "additionalFields": {}
                   },
                   {
-                    "text": "🗂 Настройка Яндекс Диска",
+                    "text": "📦 Настройка Яндекс Диска",
                     "additionalFields": {}
                   }
                 ]
@@ -863,7 +963,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT bot_display_name FROM public.telemost_user_settings WHERE chat_id = $1",
+        "query": "SELECT COALESCE((SELECT bot_display_name FROM public.telemost_user_settings WHERE chat_id = $1), 'Бот-Ассистент') AS bot_display_name",
         "options": {
           "queryReplacement": "={{ [ $('TelegramTrigger').first().json.message.chat.id ] }}"
         }
@@ -885,15 +985,43 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "={{ '✅ <b>ИМЯ БОТА ИЗМЕНЕНО</b>\\n━━━━━━━━━━━━━━━━━━━━━━\\nНовое имя успешно сохранено в профиле.\\n\\n👤 Теперь при входе на встречу бот будет отображаться как:\\n👉 <b>' + ($('PutMeetingbotName').first().json.bot_display_name || $('TelegramTrigger').first().json.message.text) + '</b>' }}",
-        "replyMarkup": "forceReply",
-        "forceReply": {
-          "force_reply": true
-        },
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "={{ '🤖 <b>Телемост Рекордер</b> • Имя изменено\\n━━━━━━━━━━━━━━━━━━━━━━\\nНовое отображаемое имя вашего бота-помощника успешно сохранено!\\n\\n👤 При входе в Яндекс.Телемост бот будет отображаться как:\\n👉 <b>' + ($('PutMeetingbotName').first().json.bot_display_name || $('TelegramTrigger').first().json.message.text) + '</b>' }}",
+        "replyMarkup": "replyKeyboard",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "HTML"
+        },
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "👤 Имя бота",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "📦 Настройка Яндекс Диска",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔙 Назад",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
         }
       },
       "id": "93e4d9e1-5520-400e-bd3b-d19e6c7f66f5",
@@ -956,7 +1084,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('TelegramTrigger').item.json.callback_query.message.chat.id }}",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
         "text": "⏹ <b>ОСТАНОВКА ЗАПИСИ</b>\n━━━━━━━━━━━━━━━━━━━━━━\n⏳ <i>Запрос на остановку сессии отправлен на сервер.</i>\n\nБот завершает запись, закрывает сессию браузера и выгружает аудиофайл.\n\n🔄 <b>Текущий статус:</b> Выгрузка файла и запуск транскрибации. Ожидайте уведомления...",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
@@ -1203,8 +1331,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "⚙️ <b>НАСТРОЙКА ЯНДЕКС.ДИСКА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nДля автоматического сохранения аудиозаписей и транскриптов укажите данные вашего аккаунта Яндекс.\n\nℹ️ <b>Инструкция:</b>\n1. Перейдите в настройки безопасности Яндекс ID.\n2. Создайте <b>Пароль приложения</b> для сервиса «Диск».\n3. Отправьте в ответ на это сообщение ваш <b>Email</b> и <b>Пароль приложения</b> через пробел.\n\n<b>Пример ввода:</b>\n<code>username@yandex.ru app-password-here</code>",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • Яндекс.Диск\n━━━━━━━━━━━━━━━━━━━━━━\nДля автоматического сохранения аудиозаписей и транскриптов укажите данные вашего аккаунта Яндекс.\n\nℹ️ <b>Инструкция:</b>\n1. Перейдите в настройки безопасности Яндекс ID.\n2. Создайте <b>Пароль приложения</b> для сервиса «Диск».\n3. Отправьте в ответ на это сообщение ваш <b>Email</b> и <b>Пароль приложения</b> через пробел.\n\n<b>Пример ввода:</b>\n<code>username@yandex.ru app-password-here</code>",
         "replyMarkup": "forceReply",
         "forceReply": {
           "force_reply": true
@@ -1252,8 +1380,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('TelegramTrigger').first().json.message?.chat?.id || $json.message?.chat?.id || 533234854 }}",
-        "text": "✅ <b>ИНТЕГРАЦИЯ НАСТРОЕНА</b>\n━━━━━━━━━━━━━━━━━━━━━━\nДоступ к вашему Яндекс.Диску успешно сохранен и проверен.\n\n📂 Все новые аудиозаписи и файлы транскриптов будут сохраняться в вашу личную папку на Диске.",
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • Яндекс.Диск\n━━━━━━━━━━━━━━━━━━━━━━\nДоступ к вашему Яндекс.Диску успешно сохранен и проверен.\n\n📂 Все новые аудиозаписи и файлы транскриптов будут сохраняться в вашу личную папку на Диске.",
         "replyMarkup": "replyKeyboard",
         "replyKeyboard": {
           "rows": [
@@ -1372,7 +1500,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT bot_display_name FROM public.telemost_user_settings WHERE chat_id = $1",
+        "query": "SELECT COALESCE((SELECT bot_display_name FROM public.telemost_user_settings WHERE chat_id = $1), 'Бот-Ассистент') AS bot_display_name",
         "options": {
           "queryReplacement": "={{ [ $('TelegramTrigger').first().json.message.chat.id ] }}"
         }
@@ -1438,6 +1566,128 @@
         -256,
         272
       ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • Справка\n━━━━━━━━━━━━━━━━━━━━━━\nЯ ваш персональный ассистент для автоматической записи и аналитики онлайн-встреч в Яндекс.Телемост.\n\n<b>Как начать запись встречи?</b>\n1. Нажмите кнопку 🔴 <b>Запись встреч</b>.\n2. Отправьте ссылку на встречу Яндекс.Телемост.\n3. Бот зайдет на встречу под вашим настроенным именем (изменить его можно в ⚙️ Настройках).\n4. Во время встречи вы можете нажать инлайн-кнопку ⏹ <b>Остановить запись</b>.\n5. По завершении встречи запись будет обработана, а результаты (аудиозапись, стенограмма и ИИ-выжимка) автоматически загрузятся на ваш Яндекс.Диск.\n\n<b>Настройки бота:</b>\n👤 <b>Имя бота:</b> Настройте отображаемое имя (например, <code>ИИ-Секретарь</code>).\n📦 <b>Яндекс.Диск:</b> Подключите ваш Яндекс.Диск по протоколу WebDAV для автоматического сохранения записей.\n\n<b>Полезные команды:</b>\n• /start — перезапустить бота и вызвать главное меню.\n• 📂 Список встреч — показать историю последних встреч.",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔴 Запись встреч",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🧠 Аналитика и ИИ",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⚙️ Настройки",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🔙 Назад",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "send-help-node",
+      "name": "SendHelp",
+      "position": [
+        -496,
+        1344
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "41afcfac-9afa-4345-9548-9bb89a3d72a2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ (($('TelegramTrigger').first().json.message || {}).chat || {}).id || ((($('TelegramTrigger').first().json.callback_query || {}).message || {}).chat || {}).id }}",
+        "text": "🤖 <b>Телемост Рекордер</b> • Ошибка\n━━━━━━━━━━━━━━━━━━━━━━\nИзвините, я не понял ваше сообщение:\n«<code>{{ ($json.message || {}).text || ($json.message || {}).caption || '' }}</code>»\n\n<i>Выберите нужный раздел на клавиатуре ниже или отправьте ссылку на встречу Яндекс.Телемост для начала записи 👇</i>",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🔴 Запись встреч",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🧠 Аналитика и ИИ",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "⚙️ Настройки",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "ℹ️ Помощь",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "send-unknown-command-node",
+      "name": "SendUnknownCommand",
+      "position": [
+        -736,
+        -100
+      ],
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "webhookId": "52afcfac-9afa-4345-9548-9bb89a3d72a2",
+      "credentials": {
+        "telegramApi": {
+          "id": "jI3o0DJ1hX0y1tuL",
+          "name": "@telemost_helper_bot"
+        }
+      }
     }
   ],
   "connections": {
@@ -1507,7 +1757,13 @@
             "index": 0
           }
         ],
-        [],
+        [
+          {
+            "node": "SendHelp",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "GetMeetingsDb",
@@ -1547,6 +1803,13 @@
         [
           {
             "node": "SaveYandexCreds",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendUnknownCommand",
             "type": "main",
             "index": 0
           }

@@ -64,3 +64,39 @@ export function segmentAudioIfNecessary(inputFilePath, segmentTimeSeconds = 1200
     });
   });
 }
+
+/**
+ * Конвертирует аудио в формат MP3 для стабильной работы AssemblyAI.
+ * 
+ * @param {string} inputFilePath - Абсолютный путь к исходному аудиофайлу WebM
+ * @returns {Promise<string>} Путь к файлу MP3
+ */
+export function convertToMp3(inputFilePath) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(inputFilePath)) {
+      return reject(new Error(`Файл не найден: ${inputFilePath}`));
+    }
+
+    const inputDir = path.dirname(inputFilePath);
+    const baseName = path.basename(inputFilePath, path.extname(inputFilePath));
+    const outputFilePath = path.join(inputDir, `${baseName}.mp3`);
+    
+    if (fs.existsSync(outputFilePath)) {
+      console.log(`[ffmpeg] MP3 уже существует: ${outputFilePath}`);
+      return resolve(outputFilePath);
+    }
+
+    const command = `ffmpeg -y -i "${inputFilePath}" -b:a 64k "${outputFilePath}"`;
+    console.log(`[ffmpeg] Запуск конвертации в MP3: ${command}`);
+
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        console.error("[ffmpeg] Ошибка конвертации в MP3:", error.message);
+        return reject(error);
+      }
+      console.log(`[ffmpeg] Успешно сконвертировано в MP3.`);
+      resolve(outputFilePath);
+    });
+  });
+}
+
