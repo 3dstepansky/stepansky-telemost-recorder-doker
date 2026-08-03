@@ -4,6 +4,7 @@ import { segmentAudioIfNecessary, convertToMp3 } from './services/ffmpeg.js';
 import { transcribeAudioAssemblyAI, transcribeAudioGroq } from './services/transcribe.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
+import { buildMeetingProcessedTelegramHtml, splitTelegramHtmlMessage, escapeTelegramHtml } from './services/telegram-format.js';
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -233,25 +234,29 @@ async function run() {
     if (chatId && chatId !== 'unknown' && chatId !== 'manual_launch' && process.env.TELEGRAM_BOT_TOKEN) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       
-      let diskInfo = yandexUser ? `<b>Папка на Яндекс.Диске:</b>\n<code>Yandex.Telemost.Records/${activeDirName}</code>\n\n` : '';
+      const diskPath = yandexUser ? `Yandex.Telemost.Records/${activeDirName}` : '';
+      const textMsg = buildMeetingProcessedTelegramHtml({
+        title,
+        diskPath,
+        summaryText
+      });
+      const messageChunks = splitTelegramHtmlMessage(textMsg);
 
-      const textMsg = `<b>Встреча обработана!</b>\n\n` +
-                      `<b>Тема:</b> ${title}\n` +
-                      diskInfo +
-                      `<b>Сводка встречи (ИИ-саммари):</b>\n${summaryText}`;
       try {
-        await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          chat_id: chatId,
-          text: textMsg,
-          parse_mode: 'HTML',
-          reply_markup: {
-            keyboard: [
-              ['🔴 Запись встреч', '🧠 Аналитика и ИИ'],
-              ['⚙️ Настройки', 'ℹ️ Помощь']
-            ],
-            resize_keyboard: true
-          }
-        });
+        for (const [index, chunk] of messageChunks.entries()) {
+          await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            chat_id: chatId,
+            text: chunk,
+            parse_mode: 'HTML',
+            reply_markup: index === messageChunks.length - 1 ? {
+              keyboard: [
+                ['🔴 Запись встреч', '🧠 Аналитика и ИИ'],
+                ['⚙️ Настройки', 'ℹ️ Помощь']
+              ],
+              resize_keyboard: true
+            } : undefined
+          });
+        }
 
         console.error(`[system] Отправка файлов в Telegram...`);
         if (finalMp3Path) await sendFileToTelegram(botToken, chatId, finalMp3Path, 'audio');
@@ -305,8 +310,8 @@ async function run() {
     if (chatId && chatId !== 'unknown' && chatId !== 'manual_launch' && process.env.TELEGRAM_BOT_TOKEN) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       const errorMsg = `<b>Ошибка обработки встречи</b>\n\n` +
-                       `<b>Тема:</b> ${title}\n` +
-                       `<b>Детали:</b> <code>${e.message}</code>`;
+                       `<b>Тема:</b> ${escapeTelegramHtml(title)}\n` +
+                       `<b>Детали:</b> <code>${escapeTelegramHtml(e.message)}</code>`;
       try {
         await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           chat_id: chatId,
