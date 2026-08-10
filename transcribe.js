@@ -4,6 +4,7 @@ import { segmentAudioIfNecessary, convertToMp3 } from './services/ffmpeg.js';
 import { transcribeAudioAssemblyAI, transcribeAudioGroq } from './services/transcribe.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
+import { escapeTelegramHtml, markdownSummaryToTelegramHtml } from './services/telegramFormat.js';
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -233,12 +234,13 @@ async function run() {
     if (chatId && chatId !== 'unknown' && chatId !== 'manual_launch' && process.env.TELEGRAM_BOT_TOKEN) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       
-      let diskInfo = yandexUser ? `<b>Папка на Яндекс.Диске:</b>\n<code>Yandex.Telemost.Records/${activeDirName}</code>\n\n` : '';
+      let diskInfo = yandexUser ? `<b>Папка на Яндекс.Диске:</b>\n<code>Yandex.Telemost.Records/${escapeTelegramHtml(activeDirName)}</code>\n\n` : '';
 
+      const formattedSummary = markdownSummaryToTelegramHtml(summaryText);
       const textMsg = `<b>Встреча обработана!</b>\n\n` +
-                      `<b>Тема:</b> ${title}\n` +
+                      `<b>Тема:</b> ${escapeTelegramHtml(title)}\n` +
                       diskInfo +
-                      `<b>Сводка встречи (ИИ-саммари):</b>\n${summaryText}`;
+                      `<b>Сводка встречи (ИИ-саммари):</b>\n${formattedSummary}`;
       try {
         await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           chat_id: chatId,
