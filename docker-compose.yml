@@ -4,6 +4,7 @@ services:
     container_name: telemost-recorder
     volumes:
       - ./recordings:/app/recordings
+      - /home/ubuntu/baza:/home/ubuntu/baza
     env_file:
       - .env
     # Для запуска через n8n или консоль:

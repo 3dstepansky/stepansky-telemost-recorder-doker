@@ -5,6 +5,7 @@ import { transcribeAudioAssemblyAI, transcribeAudioGroq } from './services/trans
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
 import { escapeTelegramHtml, markdownSummaryToTelegramHtml } from './services/telegramFormat.js';
+import { ingestTelemostToWikiRaw } from './services/wikiIngest.js';
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -213,6 +214,27 @@ async function run() {
     }
 
 
+    // 6.5. Пассивное пополнение LLM Wiki raw-слоя для разрешённых Telegram chat_id
+    let wikiRawIngest = { skipped: true, reason: 'not-run' };
+    try {
+      wikiRawIngest = ingestTelemostToWikiRaw({
+        chatId,
+        title,
+        targetDirName,
+        activeDirName,
+        transcriptText: transcriptionResult.text,
+        summaryText,
+      });
+      if (wikiRawIngest.skipped) {
+        console.error(`[system] LLM Wiki raw ingest skipped: ${wikiRawIngest.reason}`);
+      } else {
+        console.error(`[system] LLM Wiki raw ingest saved: ${wikiRawIngest.files.join(', ')}`);
+      }
+    } catch (wikiErr) {
+      wikiRawIngest = { skipped: true, error: wikiErr.message };
+      console.error(`[error] Ошибка записи в LLM Wiki raw: ${wikiErr.message}`);
+    }
+
     // 7. Вывод JSON для n8n
     console.log(JSON.stringify({
       step: 'transcription',
@@ -222,6 +244,7 @@ async function run() {
       audio_file: `Yandex.Telemost.Records/${activeDirName}/meeting_audio.webm`,
       transcript_file: `Yandex.Telemost.Records/${activeDirName}/transcript.txt`,
       summary_file: `Yandex.Telemost.Records/${activeDirName}/summary.txt`,
+      wiki_raw_ingest: wikiRawIngest,
       transcript: transcriptionResult.text,
       summary: summaryText,
       utterances: transcriptionResult.utterances,
