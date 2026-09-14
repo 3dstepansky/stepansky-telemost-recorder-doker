@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeTelegramHtml, markdownSummaryToTelegramHtml } from '../services/telegramFormat.js';
+import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from '../services/telegramFormat.js';
 
 test('escapeTelegramHtml escapes Telegram HTML control chars', () => {
   assert.equal(escapeTelegramHtml('A < B & C > D'), 'A &lt; B &amp; C &gt; D');
@@ -17,4 +17,12 @@ test('markdownSummaryToTelegramHtml renders common LLM markdown for Telegram HTM
   assert.match(output, /<i>Важно<\/i>/);
   assert.match(output, /&lt;не сломать HTML&gt;/);
   assert.doesNotMatch(output, /\*\*Ключевые темы:\*\*/);
+});
+
+test('splitTelegramText keeps every Telegram message below the requested limit', () => {
+  const input = ('Абзац с итогами встречи.\n\n').repeat(300);
+  const chunks = splitTelegramText(input, 500);
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks.every(chunk => chunk.length <= 500));
+  assert.equal(chunks.join('\n\n').replace(/\s+/g, ' ').trim(), input.replace(/\s+/g, ' ').trim());
 });

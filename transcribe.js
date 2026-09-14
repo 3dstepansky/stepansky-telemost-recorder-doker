@@ -4,8 +4,9 @@ import { segmentAudioIfNecessary, convertToMp3 } from './services/ffmpeg.js';
 import { transcribeAudioAssemblyAI, transcribeAudioGroq } from './services/transcribe.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
-import { escapeTelegramHtml, markdownSummaryToTelegramHtml } from './services/telegramFormat.js';
+import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
 import { ingestTelemostToWikiRaw } from './services/wikiIngest.js';
+import { saveMeetingResult } from './services/mongoMemory.js';
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -169,6 +170,25 @@ async function run() {
       }
     }
 
+    let mongoMeeting = null;
+    if (process.env.MONGODB_URI) {
+      try {
+        mongoMeeting = await saveMeetingResult({
+          chatId,
+          sourceMeetingId: targetDirName,
+          title,
+          transcript: transcriptionResult.text,
+          summary: summaryText,
+          transcriptionResult,
+          recordingPath: resolvedPath,
+          folderName: targetDirName,
+        });
+        console.error(`[mongo] Результат встречи сохранён: ${mongoMeeting._id}`);
+      } catch (mongoErr) {
+        console.error(`[mongo] Не удалось сохранить встречу: ${mongoErr.message}`);
+      }
+    }
+
     // 5. ИИ-анализ для переименования папки
     let activeDirName = targetDirName;
     let folderMeta = { speaker_count: 1, speakers: [], topic: 'встреча' };
@@ -260,15 +280,31 @@ async function run() {
       let diskInfo = yandexUser ? `<b>Папка на Яндекс.Диске:</b>\n<code>Yandex.Telemost.Records/${escapeTelegramHtml(activeDirName)}</code>\n\n` : '';
 
       const formattedSummary = markdownSummaryToTelegramHtml(summaryText);
-      const textMsg = `<b>Встреча обработана!</b>\n\n` +
-                      `<b>Тема:</b> ${escapeTelegramHtml(title)}\n` +
-                      diskInfo +
-                      `<b>Сводка встречи (ИИ-саммари):</b>\n${formattedSummary}`;
+      const header = `<b>Встреча обработана!</b>\n\n` +
+                     `<b>Тема:</b> ${escapeTelegramHtml(title)}\n` +
+                     diskInfo +
+                     `<b>Сводка встречи (ИИ-саммари):</b>\n`;
+      const summaryChunks = splitTelegramText(formattedSummary, 3900 - header.length);
       try {
+        for (let i = 0; i < summaryChunks.length; i++) {
+          const replyMarkup = i === summaryChunks.length - 1
+            ? (mongoMeeting ? {
+                inline_keyboard: [[{ text: '🧠 Векторизовать разговор', callback_data: `vectorize_${mongoMeeting._id}` }]]
+              } : undefined)
+            : undefined;
+          await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            chat_id: chatId,
+            text: i === 0 ? header + summaryChunks[i] : `<b>Продолжение саммари:</b>\n${summaryChunks[i]}`,
+            parse_mode: 'HTML',
+            reply_markup: replyMarkup
+          });
+        }
+
         await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           chat_id: chatId,
-          text: textMsg,
-          parse_mode: 'HTML',
+          text: mongoMeeting
+            ? 'Результаты встречи сохранены. Векторизация выполняется только по кнопке выше.'
+            : 'Результаты встречи обработаны.',
           reply_markup: {
             keyboard: [
               ['🔴 Запись встреч', '🧠 Аналитика и ИИ'],

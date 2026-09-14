@@ -7,5 +7,12 @@ services:
       - /home/ubuntu/baza:/home/ubuntu/baza
     env_file:
       - .env
+    networks:
+      - default
+      - n8n_default
     # Для запуска через n8n или консоль:
     # docker-compose run --rm recorder "https://telemost.yandex.ru/j/..."
+
+networks:
+  n8n_default:
+    external: true

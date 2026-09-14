@@ -5,6 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import { initDB, getUser, saveUser, getRecentMeetings } from './db.js';
 import { checkYandexDiskConnection } from './services/webdav.js';
+import { vectorizeMeeting } from './services/vectorize.js';
+import { ensureMongoIndexes } from './services/mongoMemory.js';
 
 dotenv.config();
 
@@ -270,6 +272,43 @@ bot.on('message', async (ctx) => {
     }
 });
 
+bot.action(/vectorize_([a-f0-9]{24})/, async (ctx) => {
+    const meetingId = ctx.match[1];
+    await ctx.answerCbQuery('Начинаю векторизацию…');
+    await ctx.telegram.editMessageReplyMarkup(
+        ctx.chat.id,
+        ctx.callbackQuery.message.message_id,
+        undefined,
+        { inline_keyboard: [[{ text: '⏳ Векторизация…', callback_data: 'vectorizing' }]] }
+    );
+    try {
+        const result = await vectorizeMeeting(meetingId, ctx.chat.id);
+        await ctx.telegram.editMessageReplyMarkup(
+            ctx.chat.id,
+            ctx.callbackQuery.message.message_id,
+            undefined,
+            { inline_keyboard: [[{ text: `✅ Векторизовано: ${result.count}`, callback_data: 'vectorized' }]] }
+        );
+        await ctx.replyWithHTML(
+            `✅ <b>Разговор векторизован</b>\n\nФрагментов: <b>${result.count}</b>\nРазмерность: <b>${result.dimensions}</b>\nМодель: <code>${result.model}</code>`,
+            MAIN_MENU
+        );
+    } catch (error) {
+        console.error('[vectorize] Ошибка:', error.message);
+        await ctx.telegram.editMessageReplyMarkup(
+            ctx.chat.id,
+            ctx.callbackQuery.message.message_id,
+            undefined,
+            { inline_keyboard: [[{ text: '🔄 Повторить векторизацию', callback_data: `vectorize_${meetingId}` }]] }
+        );
+        await ctx.replyWithHTML(`❌ <b>Не удалось векторизовать разговор.</b>\n<code>${String(error.message).replace(/[<>&]/g, '')}</code>`);
+    }
+});
+
+bot.action(['vectorizing', 'vectorized'], async (ctx) => {
+    await ctx.answerCbQuery(ctx.callbackQuery.data === 'vectorized' ? 'Разговор уже векторизован' : 'Векторизация уже выполняется');
+});
+
 bot.action(/stop_(.+)/, async (ctx) => {
     const meetingId = ctx.match[1];
     await ctx.answerCbQuery('Останавливаем...');
@@ -297,6 +336,10 @@ bot.action(/stop_(.+)/, async (ctx) => {
 (async () => {
     try {
         await initDB('/app/data/telemost_bot.sqlite');
+        if (process.env.MONGODB_URI) {
+            await ensureMongoIndexes();
+            console.log('MongoDB Atlas подключена, индексы готовы');
+        }
         bot.launch().then(() => console.log('Бот успешно запущен')).catch(e => console.error('Ошибка запуска бота', e));
     } catch (err) {
         console.error('Failed to initialize DB:', err);

@@ -15,3 +15,21 @@ export function markdownSummaryToTelegramHtml(value) {
     .replace(/_([^_\n]+)_/g, '<i>$1</i>')
     .replace(/`([^`\n]+)`/g, '<code>$1</code>');
 }
+
+export function splitTelegramText(value, maxLength = 3900) {
+  const text = String(value ?? '');
+  if (text.length <= maxLength) return [text];
+
+  const chunks = [];
+  let rest = text;
+  while (rest.length > maxLength) {
+    let splitAt = rest.lastIndexOf('\n\n', maxLength);
+    if (splitAt < Math.floor(maxLength * 0.5)) splitAt = rest.lastIndexOf('\n', maxLength);
+    if (splitAt < Math.floor(maxLength * 0.5)) splitAt = rest.lastIndexOf(' ', maxLength);
+    if (splitAt <= 0) splitAt = maxLength;
+    chunks.push(rest.slice(0, splitAt).trim());
+    rest = rest.slice(splitAt).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks;
+}

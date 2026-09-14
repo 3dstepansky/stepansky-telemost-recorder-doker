@@ -52,21 +52,26 @@ export function getUser(chatId) {
 export function saveUser(chatId, data) {
     return new Promise((resolve, reject) => {
         if (!db) return reject(new Error('Database not initialized. Call initDB first.'));
+
         const keys = Object.keys(data);
+        if (keys.length === 0) return resolve();
+
         const values = Object.values(data);
-        const setQuery = keys.map(k => `${k} = ?`).join(', ');
-        
-        db.run(`UPDATE users SET ${setQuery} WHERE chat_id = ?`, [...values, chatId], function (err) {
-            if (err) return reject(err);
-            if (this.changes === 0) {
-                const insertQuery = `INSERT INTO users (chat_id, ${keys.join(', ')}) VALUES (?, ${keys.map(() => '?').join(', ')})`;
-                db.run(insertQuery, [chatId, ...values], (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
-            } else {
-                resolve();
-            }
+        const insertColumns = ['chat_id', ...keys];
+        const placeholders = insertColumns.map(() => '?').join(', ');
+        const updateSet = keys.map(k => `${k} = excluded.${k}`).join(', ');
+
+        // Atomic UPSERT: the old UPDATE-then-INSERT flow crashed when two updates
+        // for the same chat_id arrived concurrently after bot downtime.
+        const query = `
+            INSERT INTO users (${insertColumns.join(', ')})
+            VALUES (${placeholders})
+            ON CONFLICT(chat_id) DO UPDATE SET ${updateSet}
+        `;
+
+        db.run(query, [chatId, ...values], (err) => {
+            if (err) reject(err);
+            else resolve();
         });
     });
 }
