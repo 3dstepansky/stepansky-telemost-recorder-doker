@@ -88,10 +88,10 @@ async function run() {
         try {
           const ev = JSON.parse(line);
           if (ev.type === 'track-added') {
-            trackIdToName[ev.trackId] = ev.speakerName;
+            trackIdToName[ev.trackId] = ev.displayName || ev.speakerName;
           } else if (ev.type === 'speech-segment') {
             segments.push(ev);
-            trackIdToName[ev.trackId] = ev.speakerName;
+            trackIdToName[ev.trackId] = ev.displayName || ev.speakerName;
           }
         } catch(e) {}
       });
@@ -117,7 +117,7 @@ async function run() {
           }
 
           if (bestMatch && maxOverlap > 0.5) {
-             let name = bestMatch.speakerName;
+             let name = bestMatch.displayName || bestMatch.speakerName;
              if (!name || name === "unknown") {
                 name = `Трек ${bestMatch.trackId.substring(0, 4)}`;
              }

@@ -133,6 +133,36 @@ await page.evaluateOnNewDocument(() => {
   const originalRTCPeerConnection = window.RTCPeerConnection;
   const allRemoteTracks = [];
   const activeRecorders = new Map(); // track.id -> MediaRecorder
+  const trackMetadata = new Map(); // track.id -> resolved participant metadata
+  const meetingClock = {
+    wallStartMs: null,
+    monoStartMs: null,
+    lastMs: 0,
+    isStarted() {
+      return this.monoStartMs !== null;
+    },
+    start(inputMonoMs = performance.now(), inputWallMs = Date.now()) {
+      if (this.monoStartMs === null) {
+        this.monoStartMs = inputMonoMs;
+        this.wallStartMs = inputWallMs;
+      }
+      return 0;
+    },
+    relative(inputMonoMs = performance.now()) {
+      if (this.monoStartMs === null) return 0;
+      return Math.max(0, Math.round(inputMonoMs - this.monoStartMs));
+    },
+    now(inputMonoMs = performance.now()) {
+      if (this.monoStartMs === null) this.start(inputMonoMs);
+      const raw = this.relative(inputMonoMs);
+      this.lastMs = Math.max(this.lastMs, raw);
+      return this.lastMs;
+    },
+    isoAt(relativeMs = this.lastMs) {
+      const wallStartMs = this.wallStartMs === null ? Date.now() : this.wallStartMs;
+      return new Date(wallStartMs + Math.max(0, relativeMs)).toISOString();
+    }
+  };
   let mixRecorderStarted = false;
   let mixAudioContext = null;
   let mixDestination = null;
@@ -150,7 +180,7 @@ await page.evaluateOnNewDocument(() => {
         tryStartMixRecorder();
         
         // 2. Запускаем индивидуальный трекинг
-        startTrackRecording(event.track);
+        startTrackRecording(event.track, event);
       }
     });
 
@@ -162,19 +192,104 @@ await page.evaluateOnNewDocument(() => {
     window.RTCPeerConnection[key] = originalRTCPeerConnection[key];
   });
 
-  function getSpeakerName() {
-    // Пока упрощенный поиск. В будущем можно усложнить
-    return "unknown";
+  function cleanText(value) {
+    if (typeof value !== "string") return null;
+    const cleaned = value.replace(/\s+/g, " ").trim();
+    return cleaned || null;
   }
 
-  function startTrackRecording(track) {
+  function safeMetadata(candidate = {}) {
+    const displayName = cleanText(candidate.displayName || candidate.name || candidate.title || candidate.label);
+    const participantId = cleanText(candidate.participantId || candidate.userId || candidate.peerId);
+    const confidence = typeof candidate.confidence === "number"
+      ? Math.max(0, Math.min(1, candidate.confidence))
+      : (displayName || participantId ? 0.5 : 0);
+    return {
+      participantId: participantId || null,
+      displayName: displayName || null,
+      speakerName: displayName || "unknown",
+      provenance: candidate.provenance || (displayName || participantId ? "metadata" : "fallback:unknown"),
+      confidence
+    };
+  }
+
+  function collectParticipantSnapshots() {
+    const snapshots = [];
+    const nodes = [...document.querySelectorAll("[data-participant-id], [data-user-id], [data-peer-id], [data-track-id], [data-stream-id], [aria-label], [title]")];
+    for (const node of nodes) {
+      const dataset = node.dataset || {};
+      const participantId = dataset.participantId || dataset.userId || dataset.peerId || dataset.memberId || null;
+      const trackId = dataset.trackId || dataset.mediaTrackId || null;
+      const streamId = dataset.streamId || dataset.mediaStreamId || null;
+      const displayName = dataset.displayName || dataset.name || node.getAttribute("aria-label") || node.getAttribute("title") || null;
+      if (participantId || trackId || streamId) {
+        snapshots.push({
+          participantId,
+          trackId,
+          streamId,
+          displayName,
+          provenance: "dom:data-attributes",
+          confidence: trackId || streamId ? 0.85 : 0.35
+        });
+      }
+    }
+    return snapshots;
+  }
+
+  function resolveTrackMetadata(track, event) {
+    const streamIds = (event?.streams || []).map(s => s && s.id).filter(Boolean);
+    const snapshots = collectParticipantSnapshots();
+    const exact = snapshots.find(snapshot => {
+      const ids = [snapshot.trackId, snapshot.streamId].filter(Boolean);
+      return ids.includes(track.id) || streamIds.some(id => ids.includes(id));
+    });
+    if (exact) {
+      return safeMetadata({
+        ...exact,
+        provenance: `${exact.provenance}:exact-track-or-stream-match`,
+        confidence: Math.max(exact.confidence || 0, 0.9)
+      });
+    }
+
+    // Cycle 1 intentionally does not guess from DOM order or participant list order.
+    // If Telemost does not expose an exact track/stream participant key, keep unknown.
+    return safeMetadata({
+      provenance: "fallback:unknown:no-safe-track-participant-match",
+      confidence: 0
+    });
+  }
+
+  function metadataForTrack(track) {
+    return trackMetadata.get(track.id) || safeMetadata({ provenance: "fallback:unknown:track-not-registered", confidence: 0 });
+  }
+
+  function getSpeakerName(track) {
+    return metadataForTrack(track).speakerName;
+  }
+
+  function startTrackRecording(track, event) {
     if (activeRecorders.has(track.id)) return;
 
+    const metadata = resolveTrackMetadata(track, event);
+    trackMetadata.set(track.id, metadata);
+    // The track that starts the mixed recorder arrived just before the origin existed.
+    // Pin that initial track-added event to exact audio-relative zero; later tracks use
+    // the same origin and monotonic clock.
+    const addedMs = activeRecorders.size === 0 && meetingClock.isStarted()
+      ? meetingClock.now(meetingClock.monoStartMs)
+      : meetingClock.now();
     window.__logTrackEvent({
-      ts: new Date().toISOString(),
+      ts: meetingClock.isoAt(addedMs),
+      t_ms: addedMs,
+      meeting_relative_ms: addedMs,
       type: "track-added",
       trackId: track.id,
-      speakerName: getSpeakerName(),
+      speakerName: metadata.speakerName,
+      participantId: metadata.participantId,
+      displayName: metadata.displayName,
+      provenance: metadata.provenance,
+      confidence: metadata.confidence,
+      streamIds: (event?.streams || []).map(s => s && s.id).filter(Boolean),
       kind: track.kind,
       label: track.label,
       muted: track.muted,
@@ -208,10 +323,8 @@ await page.evaluateOnNewDocument(() => {
 
     const dataArray = new Float32Array(analyser.fftSize);
     let speaking = false;
-    let speakingStart = 0;
+    let speakingStartMonoMs = 0;
     let maxAmplitude = 0;
-    
-    const startTime = Date.now();
     
     const intervalId = setInterval(() => {
       analyser.getFloatTimeDomainData(dataArray);
@@ -225,7 +338,7 @@ await page.evaluateOnNewDocument(() => {
       if (peak > threshold) {
         if (!speaking) {
           speaking = true;
-          speakingStart = Date.now();
+          speakingStartMonoMs = performance.now();
           maxAmplitude = peak;
         } else {
           if (peak > maxAmplitude) maxAmplitude = peak;
@@ -233,15 +346,25 @@ await page.evaluateOnNewDocument(() => {
       } else {
         if (speaking) {
           speaking = false;
-          const duration = Date.now() - speakingStart;
+          const endMonoMs = performance.now();
+          const duration = endMonoMs - speakingStartMonoMs;
           if (duration > 300) { 
+            const segmentMetadata = metadataForTrack(track);
+            const startMs = meetingClock.relative(speakingStartMonoMs);
+            const endMs = Math.max(startMs, meetingClock.now(endMonoMs));
             window.__logTrackEvent({
-              ts: new Date().toISOString(),
+              ts: meetingClock.isoAt(endMs),
+              t_ms: endMs,
+              meeting_relative_ms: endMs,
               type: "speech-segment",
               trackId: track.id,
-              speakerName: getSpeakerName(),
-              start_ms: speakingStart - startTime,
-              end_ms: Date.now() - startTime,
+              speakerName: segmentMetadata.speakerName,
+              participantId: segmentMetadata.participantId,
+              displayName: segmentMetadata.displayName,
+              provenance: segmentMetadata.provenance,
+              confidence: segmentMetadata.confidence,
+              start_ms: startMs,
+              end_ms: endMs,
               amplitude_peak: parseFloat(maxAmplitude.toFixed(4))
             });
           }
@@ -276,6 +399,9 @@ await page.evaluateOnNewDocument(() => {
 
     if (!mixRecorderStarted && allRemoteTracks.length > 0) {
       mixRecorderStarted = true;
+      // The mixed WebM starts here; all ASR offsets and VAD/track events must use this
+      // audio-relative origin, not the earlier page-load/injection time.
+      meetingClock.start(performance.now(), Date.now());
       mixRecorder = new MediaRecorder(mixDestination.stream, {
         mimeType: "audio/webm;codecs=opus",
         audioBitsPerSecond: 32000,
@@ -312,10 +438,15 @@ await page.evaluateOnNewDocument(() => {
         data.recorder.stop();
       }
       data.audioContext.close();
+      const metadata = metadataForTrack(data.track);
       summary.tracks.push({
         trackId: trackId,
         label: data.track.label,
-        speakerName: getSpeakerName()
+        speakerName: metadata.speakerName,
+        participantId: metadata.participantId,
+        displayName: metadata.displayName,
+        provenance: metadata.provenance,
+        confidence: metadata.confidence
       });
     }
 
