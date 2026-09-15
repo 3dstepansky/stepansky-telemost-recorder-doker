@@ -18,11 +18,109 @@ function safeString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function isKnownName(value) {
+  const str = safeString(value);
+  return str !== null && str.toLowerCase() !== UNKNOWN_SPEAKER;
+}
+
 function safeSpeakerName(metadata = {}) {
   const speakerName = safeString(metadata.speakerName);
   const displayName = safeString(metadata.displayName);
   if (speakerName && speakerName.toLowerCase() !== UNKNOWN_SPEAKER) return speakerName;
   return displayName || speakerName || UNKNOWN_SPEAKER;
+}
+
+function enrichUtteranceConfidence(utterance = {}, trackMetadata = {}) {
+  const trackConfidence = isFiniteNumber(trackMetadata.confidence)
+    ? Math.max(0, Math.min(1, trackMetadata.confidence))
+    : 0;
+
+  let minWordConfidence = 1;
+  if (Array.isArray(utterance.words) && utterance.words.length > 0) {
+    let foundWordConfidence = false;
+    for (const w of utterance.words) {
+      if (w && isFiniteNumber(w.confidence)) {
+        foundWordConfidence = true;
+        minWordConfidence = Math.min(minWordConfidence, Math.max(0, Math.min(1, w.confidence)));
+      }
+    }
+    if (!foundWordConfidence) {
+      minWordConfidence = 1;
+    }
+  }
+
+  const rawConfidence = Math.min(trackConfidence, minWordConfidence);
+  const speaker_confidence = Number(rawConfidence.toFixed(2));
+  const displayName = safeString(trackMetadata.displayName) || safeString(utterance.displayName);
+  const needs_human_review = trackConfidence < 0.3 && !displayName;
+  const original_speaker_label = utterance.speaker !== undefined ? utterance.speaker : null;
+
+  return {
+    speaker_confidence,
+    needs_human_review,
+    original_speaker_label,
+  };
+}
+
+function resolveParticipantTracks(input) {
+  let tracks = [];
+  if (input && input.byTrackId instanceof Map) {
+    tracks = Array.from(input.byTrackId.values());
+  } else if (input instanceof Map) {
+    tracks = Array.from(input.values());
+  } else if (Array.isArray(input)) {
+    tracks = input;
+  }
+
+  const resultMap = new Map();
+
+  for (const track of tracks) {
+    if (!track) continue;
+    const participantId = safeString(track.participantId);
+    if (!participantId) continue;
+
+    const trackId = safeString(track.trackId);
+    let entry = resultMap.get(participantId);
+    if (!entry) {
+      entry = {
+        speakerName: UNKNOWN_SPEAKER,
+        displayName: null,
+        trackIds: [],
+        merged_tracks: [],
+      };
+      resultMap.set(participantId, entry);
+    }
+
+    if (trackId && !entry.trackIds.includes(trackId)) {
+      entry.trackIds.push(trackId);
+    }
+
+    const candDisplayName = safeString(track.displayName);
+    const candSpeakerName = safeString(track.speakerName);
+
+    if (!isKnownName(entry.displayName) && isKnownName(candDisplayName)) {
+      entry.displayName = candDisplayName;
+    }
+    if (!isKnownName(entry.speakerName) && isKnownName(candSpeakerName)) {
+      entry.speakerName = candSpeakerName;
+    }
+  }
+
+  for (const [pid, entry] of resultMap.entries()) {
+    if (!isKnownName(entry.speakerName) && isKnownName(entry.displayName)) {
+      entry.speakerName = entry.displayName;
+    }
+    if (!isKnownName(entry.displayName) && isKnownName(entry.speakerName)) {
+      entry.displayName = entry.speakerName;
+    }
+    if (entry.trackIds.length > 1) {
+      entry.merged_tracks = [...entry.trackIds];
+    } else {
+      entry.merged_tracks = [];
+    }
+  }
+
+  return resultMap;
 }
 
 function parseJsonFile(filePath, fallback = null) {
@@ -165,10 +263,12 @@ function mergeTrackUtterances(trackResults) {
       const start = roundSeconds(Math.max(0, localStart + offsetSeconds));
       const end = roundSeconds(Math.max(start, localEnd + offsetSeconds));
       const speakerName = safeSpeakerName(trackResult.metadata);
+      const confidenceInfo = enrichUtteranceConfidence(utterance, trackResult.metadata);
 
       utterances.push({
         ...utterance,
         speaker: speakerName,
+        original_speaker_label: confidenceInfo.original_speaker_label,
         text: utterance.text || '',
         start,
         end,
@@ -176,7 +276,8 @@ function mergeTrackUtterances(trackResults) {
         participantId: trackResult.metadata.participantId,
         displayName: trackResult.metadata.displayName,
         speaker_provenance: trackResult.metadata.provenance,
-        speaker_confidence: trackResult.metadata.confidence,
+        speaker_confidence: confidenceInfo.speaker_confidence,
+        needs_human_review: confidenceInfo.needs_human_review,
         track_recording_offset_ms: trackResult.metadata.recordingOffsetMs || 0,
         track_recording_offset_provenance: trackResult.metadata.recordingOffsetProvenance || 'fallback:zero:no-track-added-offset',
         source_utterance_index: index,
@@ -221,6 +322,150 @@ function normalizeTranscriptionResult(result = {}) {
 function hasUsableTranscription(result = {}) {
   const normalized = normalizeTranscriptionResult(result);
   return normalized.text.length > 0 || normalized.utterances.length > 0;
+}
+
+function applyMixedTrackEventSpeakerRemap(transcriptionResult, recordingDir) {
+  if (!transcriptionResult || !Array.isArray(transcriptionResult.utterances) || transcriptionResult.utterances.length === 0) {
+    return transcriptionResult;
+  }
+
+  const trackEventsPath = recordingDir ? path.join(recordingDir, 'meta', 'track_events.ndjson') : null;
+  const eventsRaw = (trackEventsPath && fs.existsSync(trackEventsPath)) ? fs.readFileSync(trackEventsPath, 'utf-8') : '';
+  const segments = [];
+
+  if (eventsRaw) {
+    eventsRaw.split('\n').forEach(line => {
+      if (!line.trim()) return;
+      try {
+        const ev = JSON.parse(line);
+        if (ev.type === 'speech-segment') {
+          segments.push(ev);
+        }
+      } catch(e) {}
+    });
+  }
+
+  let metadataIndex = null;
+  let participantMap = null;
+  if (recordingDir && fs.existsSync(recordingDir)) {
+    try {
+      metadataIndex = loadTrackMetadata(recordingDir);
+      participantMap = resolveParticipantTracks(metadataIndex);
+    } catch (e) {}
+  }
+
+  const diarizedToDisplayName = new Map();
+
+  function isDiarizedLabel(label) {
+    if (typeof label !== 'string') return false;
+    const trimmed = label.trim();
+    return /^Спикер\s+[A-Z0-9]+$/i.test(trimmed) || /^[A-Z]$/i.test(trimmed);
+  }
+
+  function getDisplayNameForSegment(seg) {
+    if (!seg) return null;
+    let name = safeString(seg.displayName) || safeString(seg.speakerName);
+    if (name && name.toLowerCase() !== UNKNOWN_SPEAKER) return name;
+
+    if (seg.trackId && metadataIndex && metadataIndex.byTrackId.has(seg.trackId)) {
+      const meta = metadataIndex.byTrackId.get(seg.trackId);
+      if (meta && isKnownName(meta.displayName)) return meta.displayName;
+      if (meta && isKnownName(meta.speakerName)) return meta.speakerName;
+      if (meta && meta.participantId && participantMap && participantMap.has(meta.participantId)) {
+        const p = participantMap.get(meta.participantId);
+        if (isKnownName(p.displayName)) return p.displayName;
+        if (isKnownName(p.speakerName)) return p.speakerName;
+      }
+    }
+
+    if (seg.participantId && participantMap && participantMap.has(seg.participantId)) {
+      const p = participantMap.get(seg.participantId);
+      if (isKnownName(p.displayName)) return p.displayName;
+      if (isKnownName(p.speakerName)) return p.speakerName;
+    }
+
+    return null;
+  }
+
+  // Pass 1: Primary remap by track_events speech-segment overlap
+  if (segments.length > 0) {
+    for (const utt of transcriptionResult.utterances) {
+      const origSpeaker = utt.speaker;
+      let bestMatch = null;
+      let maxOverlap = 0;
+
+      for (const seg of segments) {
+        const segStart = seg.start_ms / 1000;
+        const segEnd = seg.end_ms / 1000;
+        const overlapStart = Math.max(utt.start, segStart);
+        const overlapEnd = Math.min(utt.end, segEnd);
+        const overlap = overlapEnd - overlapStart;
+
+        if (overlap > maxOverlap) {
+          maxOverlap = overlap;
+          bestMatch = seg;
+        }
+      }
+
+      if (bestMatch && maxOverlap > 0.5) {
+        const resolvedName = getDisplayNameForSegment(bestMatch) || safeString(bestMatch.displayName) || safeString(bestMatch.speakerName) || UNKNOWN_SPEAKER;
+        utt.speaker = resolvedName;
+
+        if (isDiarizedLabel(origSpeaker) && isKnownName(resolvedName)) {
+          diarizedToDisplayName.set(origSpeaker, resolvedName);
+          const rawLetter = origSpeaker.replace(/^Спикер\s+/i, '').trim();
+          diarizedToDisplayName.set(rawLetter, resolvedName);
+          diarizedToDisplayName.set(`Спикер ${rawLetter}`, resolvedName);
+        }
+      }
+    }
+  }
+
+  // Fallback for Pass 1: If diarized labels exist but were not mapped by speech-segments, check participantMap in order
+  if (participantMap && participantMap.size > 0) {
+    const knownParticipants = Array.from(participantMap.values()).filter(p => isKnownName(p.displayName) || isKnownName(p.speakerName));
+    const diarizedLabelsFound = [];
+    for (const utt of transcriptionResult.utterances) {
+      if (isDiarizedLabel(utt.speaker)) {
+        const rawLetter = utt.speaker.replace(/^Спикер\s+/i, '').trim();
+        if (!diarizedLabelsFound.includes(rawLetter)) {
+          diarizedLabelsFound.push(rawLetter);
+        }
+      }
+    }
+    diarizedLabelsFound.forEach((letter, index) => {
+      if (index < knownParticipants.length) {
+        const p = knownParticipants[index];
+        const name = p.displayName || p.speakerName;
+        if (!diarizedToDisplayName.has(letter)) {
+          diarizedToDisplayName.set(letter, name);
+          diarizedToDisplayName.set(`Спикер ${letter}`, name);
+        }
+      }
+    });
+  }
+
+  // Pass 2: Secondary remap for diarized speakers "Спикер A/B/C" or "A/B/C" -> displayName from metadata/mapping
+  for (const utt of transcriptionResult.utterances) {
+    if (isDiarizedLabel(utt.speaker)) {
+      if (diarizedToDisplayName.has(utt.speaker)) {
+        utt.speaker = diarizedToDisplayName.get(utt.speaker);
+      } else {
+        const rawLetter = utt.speaker.replace(/^Спикер\s+/i, '').trim();
+        if (diarizedToDisplayName.has(rawLetter)) {
+          utt.speaker = diarizedToDisplayName.get(rawLetter);
+        }
+      }
+    }
+  }
+
+  let newText = '';
+  for (const utt of transcriptionResult.utterances) {
+    newText += `${utt.speaker}: ${utt.text}\n`;
+  }
+  transcriptionResult.text = newText.trim();
+
+  return transcriptionResult;
 }
 
 async function transcribeAudioWithFallback(filePath, {
@@ -335,4 +580,7 @@ export {
   hasUsableTranscription,
   transcribeAudioWithFallback,
   transcribeTracks,
+  enrichUtteranceConfidence,
+  resolveParticipantTracks,
+  applyMixedTrackEventSpeakerRemap,
 };

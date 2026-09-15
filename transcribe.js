@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { transcribeTracks, transcribeAudioWithFallback } from './services/perTrackTranscription.js';
+import { transcribeTracks, transcribeAudioWithFallback, applyMixedTrackEventSpeakerRemap } from './services/perTrackTranscription.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
 import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
@@ -44,59 +44,7 @@ if (!filePath || !targetDirName) {
   process.exit(1);
 }
 
-function applyMixedTrackEventSpeakerRemap(transcriptionResult, recordingDir) {
-  const trackEventsPath = path.join(recordingDir, 'meta', 'track_events.ndjson');
-  if (!fs.existsSync(trackEventsPath)) return transcriptionResult;
 
-  console.error(`[system] Применяем fallback-маппинг спикеров из track_events для mixed ASR...`);
-  const eventsRaw = fs.readFileSync(trackEventsPath, 'utf-8');
-  const segments = [];
-
-  eventsRaw.split('\n').forEach(line => {
-    if (!line.trim()) return;
-    try {
-      const ev = JSON.parse(line);
-      if (ev.type === 'speech-segment') {
-        segments.push(ev);
-      }
-    } catch(e) {}
-  });
-
-  if (!transcriptionResult.utterances || transcriptionResult.utterances.length === 0 || segments.length === 0) {
-    return transcriptionResult;
-  }
-
-  let newText = '';
-  for (const utt of transcriptionResult.utterances) {
-    let bestMatch = null;
-    let maxOverlap = 0;
-
-    for (const seg of segments) {
-      const segStart = seg.start_ms / 1000;
-      const segEnd = seg.end_ms / 1000;
-      const overlapStart = Math.max(utt.start, segStart);
-      const overlapEnd = Math.min(utt.end, segEnd);
-      const overlap = overlapEnd - overlapStart;
-
-      if (overlap > maxOverlap) {
-        maxOverlap = overlap;
-        bestMatch = seg;
-      }
-    }
-
-    if (bestMatch && maxOverlap > 0.5) {
-      let name = bestMatch.displayName || bestMatch.speakerName;
-      if (!name || name === 'unknown') {
-        name = 'unknown';
-      }
-      utt.speaker = name;
-    }
-    newText += `${utt.speaker}: ${utt.text}\n`;
-  }
-
-  transcriptionResult.text = newText.trim();
-  return transcriptionResult;
-}
 
 async function run() {
   const resolvedPath = path.resolve(filePath);
