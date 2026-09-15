@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { segmentAudioIfNecessary, convertToMp3 } from './services/ffmpeg.js';
-import { transcribeAudioAssemblyAI, transcribeAudioGroq } from './services/transcribe.js';
+import { transcribeTracks, transcribeAudioWithFallback } from './services/perTrackTranscription.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
 import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
@@ -45,6 +44,60 @@ if (!filePath || !targetDirName) {
   process.exit(1);
 }
 
+function applyMixedTrackEventSpeakerRemap(transcriptionResult, recordingDir) {
+  const trackEventsPath = path.join(recordingDir, 'meta', 'track_events.ndjson');
+  if (!fs.existsSync(trackEventsPath)) return transcriptionResult;
+
+  console.error(`[system] Применяем fallback-маппинг спикеров из track_events для mixed ASR...`);
+  const eventsRaw = fs.readFileSync(trackEventsPath, 'utf-8');
+  const segments = [];
+
+  eventsRaw.split('\n').forEach(line => {
+    if (!line.trim()) return;
+    try {
+      const ev = JSON.parse(line);
+      if (ev.type === 'speech-segment') {
+        segments.push(ev);
+      }
+    } catch(e) {}
+  });
+
+  if (!transcriptionResult.utterances || transcriptionResult.utterances.length === 0 || segments.length === 0) {
+    return transcriptionResult;
+  }
+
+  let newText = '';
+  for (const utt of transcriptionResult.utterances) {
+    let bestMatch = null;
+    let maxOverlap = 0;
+
+    for (const seg of segments) {
+      const segStart = seg.start_ms / 1000;
+      const segEnd = seg.end_ms / 1000;
+      const overlapStart = Math.max(utt.start, segStart);
+      const overlapEnd = Math.min(utt.end, segEnd);
+      const overlap = overlapEnd - overlapStart;
+
+      if (overlap > maxOverlap) {
+        maxOverlap = overlap;
+        bestMatch = seg;
+      }
+    }
+
+    if (bestMatch && maxOverlap > 0.5) {
+      let name = bestMatch.displayName || bestMatch.speakerName;
+      if (!name || name === 'unknown') {
+        name = 'unknown';
+      }
+      utt.speaker = name;
+    }
+    newText += `${utt.speaker}: ${utt.text}\n`;
+  }
+
+  transcriptionResult.text = newText.trim();
+  return transcriptionResult;
+}
+
 async function run() {
   const resolvedPath = path.resolve(filePath);
   if (!fs.existsSync(resolvedPath)) {
@@ -56,78 +109,28 @@ async function run() {
     let transcriptionResult;
     let finalMp3Path = null;
 
-    try {
-      // 1. Транскрибация (отправляем файл целиком)
-      console.error(`[system] Конвертация в MP3: ${resolvedPath}`);
-      finalMp3Path = await convertToMp3(resolvedPath);
-      console.error(`[system] Запуск ИИ-транскрибации AssemblyAI для: ${finalMp3Path}`);
-      transcriptionResult = await transcribeAudioAssemblyAI(finalMp3Path);
-    } catch (assemblyError) {
-      console.error(`[system] Ошибка AssemblyAI: ${assemblyError.message}. Переключаемся на резервную модель (Groq)...`);
-      
-      // 1.1 Резервная нарезка аудио на чанки по 10 минут
-      console.error(`[system] Проверка размера и сегментация для Groq: ${resolvedPath}`);
-      const audioChunks = await segmentAudioIfNecessary(resolvedPath, 600);
+    const recordingDir = path.dirname(resolvedPath);
+    const metaDir = path.join(recordingDir, "meta");
 
-      // 1.2 Транскрибация через Groq
-      console.error(`[system] Запуск резервной ИИ-транскрибации Groq для ${audioChunks.length} чанков...`);
-      transcriptionResult = await transcribeAudioGroq(audioChunks, 600);
+    const perTrackResult = await transcribeTracks(recordingDir);
+    if (perTrackResult.usedPerTrack) {
+      transcriptionResult = perTrackResult;
+      console.error(`[system] Per-track транскрибация успешна: ${perTrackResult.track_diagnostics.successes.length} канал(ов), ошибок: ${perTrackResult.track_diagnostics.failures.length}`);
+      for (const failure of perTrackResult.track_diagnostics.failures) {
+        console.error(`[warn] Ошибка ASR трека ${failure.trackId}: ${failure.error}`);
+      }
+    } else {
+      console.error(`[system] Per-track транскрибация недоступна (${perTrackResult.reason}). Используем mixed fallback...`);
+      const mixed = await transcribeAudioWithFallback(resolvedPath, { singleTrack: false });
+      transcriptionResult = applyMixedTrackEventSpeakerRemap(mixed.result, recordingDir);
+      finalMp3Path = mixed.mp3Path || null;
     }
 
-    // 2.5 Маппинг спикеров по track_events
-    const metaDir = path.join(path.dirname(resolvedPath), "meta");
-    const trackEventsPath = path.join(metaDir, "track_events.ndjson");
-    if (fs.existsSync(trackEventsPath)) {
-      console.error(`[system] Применяем маппинг спикеров из track_events...`);
-      const eventsRaw = fs.readFileSync(trackEventsPath, 'utf-8');
-      const segments = [];
-      const trackIdToName = {};
-      
-      eventsRaw.split('\n').forEach(line => {
-        if (!line.trim()) return;
-        try {
-          const ev = JSON.parse(line);
-          if (ev.type === 'track-added') {
-            trackIdToName[ev.trackId] = ev.displayName || ev.speakerName;
-          } else if (ev.type === 'speech-segment') {
-            segments.push(ev);
-            trackIdToName[ev.trackId] = ev.displayName || ev.speakerName;
-          }
-        } catch(e) {}
-      });
-
-      if (transcriptionResult.utterances && transcriptionResult.utterances.length > 0 && segments.length > 0) {
-        let newText = "";
-        for (const utt of transcriptionResult.utterances) {
-          let bestMatch = null;
-          let maxOverlap = 0;
-          
-          for (const seg of segments) {
-            const segStart = seg.start_ms / 1000;
-            const segEnd = seg.end_ms / 1000;
-            
-            const overlapStart = Math.max(utt.start, segStart);
-            const overlapEnd = Math.min(utt.end, segEnd);
-            const overlap = overlapEnd - overlapStart;
-            
-            if (overlap > maxOverlap) {
-              maxOverlap = overlap;
-              bestMatch = seg;
-            }
-          }
-
-          if (bestMatch && maxOverlap > 0.5) {
-             let name = bestMatch.displayName || bestMatch.speakerName;
-             if (!name || name === "unknown") {
-                name = `Трек ${bestMatch.trackId.substring(0, 4)}`;
-             }
-             utt.speaker = name;
-          }
-          newText += `${utt.speaker}: ${utt.text}\n`;
-        }
-        
-        transcriptionResult.text = newText.trim();
-      }
+    if (!Array.isArray(transcriptionResult.utterances)) {
+      transcriptionResult.utterances = [];
+    }
+    if (typeof transcriptionResult.text !== 'string') {
+      transcriptionResult.text = transcriptionResult.utterances.map(u => `${u.speaker || 'unknown'}: ${u.text || ''}`).join('\n').trim();
     }
 
     // 3. Создание текстового файла с транскрипцией
@@ -268,6 +271,10 @@ async function run() {
       transcript: transcriptionResult.text,
       summary: summaryText,
       utterances: transcriptionResult.utterances,
+      track_transcription: transcriptionResult.track_diagnostics ? {
+        used_per_track: transcriptionResult.usedPerTrack === true,
+        diagnostics: transcriptionResult.track_diagnostics
+      } : undefined,
       speaker_count: finalSpeakerCount,
       utterance_count: transcriptionResult.utterances.length,
       transcribed_at: new Date().toISOString()
@@ -347,9 +354,7 @@ async function run() {
 
     const tracksDir = path.join(path.dirname(resolvedPath), 'tracks');
     if (fs.existsSync(tracksDir)) {
-      const files = fs.readdirSync(tracksDir);
-      for (const file of files) fs.unlinkSync(path.join(tracksDir, file));
-      fs.rmdirSync(tracksDir);
+      fs.rmSync(tracksDir, { recursive: true, force: true });
     }
 
     const parentDir = path.dirname(resolvedPath);

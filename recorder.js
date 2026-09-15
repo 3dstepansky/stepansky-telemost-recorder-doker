@@ -278,10 +278,13 @@ await page.evaluateOnNewDocument(() => {
     const addedMs = activeRecorders.size === 0 && meetingClock.isStarted()
       ? meetingClock.now(meetingClock.monoStartMs)
       : meetingClock.now();
+    track.__recordingStartMonoMs = (meetingClock.monoStartMs || performance.now()) + addedMs;
     window.__logTrackEvent({
       ts: meetingClock.isoAt(addedMs),
       t_ms: addedMs,
       meeting_relative_ms: addedMs,
+      recording_offset_ms: addedMs,
+      recording_offset_provenance: "track-added:conservative-mediarecorder-start-offset",
       type: "track-added",
       trackId: track.id,
       speakerName: metadata.speakerName,
@@ -446,7 +449,9 @@ await page.evaluateOnNewDocument(() => {
         participantId: metadata.participantId,
         displayName: metadata.displayName,
         provenance: metadata.provenance,
-        confidence: metadata.confidence
+        confidence: metadata.confidence,
+        recordingOffsetMs: meetingClock.relative(data.track.__recordingStartMonoMs || meetingClock.monoStartMs),
+        recordingOffsetProvenance: "track-added:conservative-mediarecorder-start-offset"
       });
     }
 

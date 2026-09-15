@@ -5,13 +5,130 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const ASSEMBLY_WORD_PAUSE_MS = 800;
+const ASSEMBLY_WORD_MAX_CHARS = 240;
+const ASSEMBLY_WORD_MAX_DURATION_MS = 15_000;
+
+function isFiniteNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function roundSecondsFromMs(value) {
+    return Number((value / 1000).toFixed(2));
+}
+
+function safeText(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function formatAssemblySpeaker(speaker, { speakerLabels = true } = {}) {
+    const safeSpeaker = safeText(speaker);
+    if (!speakerLabels) return safeSpeaker ? `Спикер ${safeSpeaker}` : 'Спикер';
+    return `Спикер ${safeSpeaker || 'unknown'}`;
+}
+
+function normalizeAssemblyUtterance(utterance, options = {}) {
+    const text = safeText(utterance?.text);
+    if (!text || !isFiniteNumber(utterance?.start) || !isFiniteNumber(utterance?.end)) return null;
+    return {
+        speaker: formatAssemblySpeaker(utterance.speaker, options),
+        text,
+        start: roundSecondsFromMs(utterance.start),
+        end: roundSecondsFromMs(Math.max(utterance.end, utterance.start)),
+    };
+}
+
+function normalizeAssemblyWord(word) {
+    const text = safeText(word?.text);
+    if (!text || !isFiniteNumber(word?.start) || !isFiniteNumber(word?.end)) return null;
+    return {
+        text,
+        start: Math.max(0, word.start),
+        end: Math.max(word.start, word.end),
+        speaker: safeText(word.speaker),
+    };
+}
+
+function wordsToUtterances(words = [], transcriptText = '', options = {}) {
+    const normalizedWords = (Array.isArray(words) ? words : [])
+        .map(normalizeAssemblyWord)
+        .filter(Boolean)
+        .sort((a, b) => (a.start - b.start) || (a.end - b.end));
+
+    if (normalizedWords.length === 0) return [];
+
+    const groups = [];
+    let current = null;
+
+    for (const word of normalizedWords) {
+        const nextText = current ? `${current.text} ${word.text}` : word.text;
+        const pauseMs = current ? word.start - current.end : 0;
+        const durationMs = current ? word.end - current.start : word.end - word.start;
+        const speakerChanged = Boolean(options.speakerLabels && current?.speaker && word.speaker && current.speaker !== word.speaker);
+        const shouldSplit = Boolean(current) && (
+            pauseMs > ASSEMBLY_WORD_PAUSE_MS ||
+            nextText.length > ASSEMBLY_WORD_MAX_CHARS ||
+            durationMs > ASSEMBLY_WORD_MAX_DURATION_MS ||
+            speakerChanged
+        );
+
+        if (shouldSplit) {
+            groups.push(current);
+            current = null;
+        }
+
+        if (!current) {
+            current = { text: word.text, start: word.start, end: word.end, speaker: word.speaker };
+        } else {
+            current.text = nextText;
+            current.end = Math.max(current.end, word.end);
+            if (!current.speaker && word.speaker) current.speaker = word.speaker;
+        }
+    }
+
+    if (current) groups.push(current);
+
+    const utterances = groups
+        .map((group) => normalizeAssemblyUtterance(group, options))
+        .filter(Boolean);
+
+    if (utterances.length === 0 && safeText(transcriptText)) {
+        const first = normalizedWords[0];
+        const last = normalizedWords[normalizedWords.length - 1];
+        return [{
+            speaker: formatAssemblySpeaker(first.speaker, options),
+            text: safeText(transcriptText),
+            start: roundSecondsFromMs(first.start),
+            end: roundSecondsFromMs(Math.max(last.end, first.start)),
+        }];
+    }
+
+    return utterances;
+}
+
+function normalizeAssemblyAITranscript(transcript = {}, { speakerLabels = true } = {}) {
+    const text = safeText(transcript.text);
+    let utterances = (Array.isArray(transcript.utterances) ? transcript.utterances : [])
+        .map((utterance) => normalizeAssemblyUtterance(utterance, { speakerLabels }))
+        .filter(Boolean);
+
+    if (utterances.length === 0 && !speakerLabels) {
+        utterances = wordsToUtterances(transcript.words, text, { speakerLabels });
+    }
+
+    return {
+        text,
+        utterances,
+    };
+}
+
 /**
  * Транскрибация аудио через AssemblyAI с разделением на спикеров.
  * Поддерживает файлы до 5 ГБ и 10 часов аудио.
  * 
  * @param {string} filePath - Путь к аудио-файлу
  */
-export async function transcribeAudioAssemblyAI(filePath) {
+export async function transcribeAudioAssemblyAI(filePath, { speakerLabels = true } = {}) {
     if (!process.env.ASSEMBLYAI_API_KEY) {
         throw new Error("ASSEMBLYAI_API_KEY не задан в .env файле");
     }
@@ -26,7 +143,7 @@ export async function transcribeAudioAssemblyAI(filePath) {
         audio: filePath,
         speech_models: ["universal-3-pro", "universal-2"],
         language_detection: true,
-        speaker_labels: true,
+        speaker_labels: speakerLabels,
     };
 
     try {
@@ -38,17 +155,7 @@ export async function transcribeAudioAssemblyAI(filePath) {
 
         console.log("[transcribe] Транскрибация AssemblyAI завершена успешно");
 
-        const allUtterances = (transcript.utterances || []).map(u => ({
-            speaker: `Спикер ${u.speaker}`,
-            text: u.text,
-            start: Number((u.start / 1000).toFixed(2)),
-            end: Number((u.end / 1000).toFixed(2))
-        }));
-
-        return {
-            text: transcript.text,
-            utterances: allUtterances
-        };
+        return normalizeAssemblyAITranscript(transcript, { speakerLabels });
     } catch (error) {
         console.error(`[transcribe] Ошибка во время транскрибации AssemblyAI:`, error.message);
         throw error;
@@ -61,6 +168,8 @@ export async function transcribeAudioAssemblyAI(filePath) {
  * @param {string[]} filePaths - Массив путей к аудио-файлам (исходный или чанки)
  * @param {number} segmentLengthSeconds - Размер сегмента нарезки в секундах
  */
+export { normalizeAssemblyAITranscript, wordsToUtterances };
+
 export async function transcribeAudioGroq(filePaths, segmentLengthSeconds = 600) {
     if (!process.env.GROQ_API_KEY) {
         throw new Error("GROQ_API_KEY не задан в .env файле");
