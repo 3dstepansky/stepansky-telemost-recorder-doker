@@ -7,6 +7,7 @@ import { initDB, getUser, saveUser, getRecentMeetings } from './db.js';
 import { checkYandexDiskConnection } from './services/webdav.js';
 import { vectorizeMeeting } from './services/vectorize.js';
 import { ensureMongoIndexes } from './services/mongoMemory.js';
+import { detectPlatform } from './services/platform-detector.js';
 
 dotenv.config();
 
@@ -42,7 +43,7 @@ bot.hears(['/start', '/menu', '🔙 Назад', '/back'], async (ctx) => {
     }
 
     await ctx.replyWithHTML(
-        `<b>Телемост Рекордер</b>\n\nЯ записываю звонки в Яндекс Телемосте, расшифровываю аудио и делаю саммари.\nГотовые файлы я могу присылать прямо в чат или сохранять на ваш Диск.${statusText}\n\nВыберите команду в меню:`,
+        `<b>Meeting Recorder</b>\n\nЯ записываю звонки в <b>Яндекс.Телемосте</b>, <b>Google Meet</b> и <b>Zoom</b>, расшифровываю аудио по спикерам и делаю саммари.\nГотовые файлы я могу присылать прямо в чат или сохранять на ваш Диск.${statusText}\n\nВыберите команду в меню:`,
         MAIN_MENU
     );
 });
@@ -58,7 +59,7 @@ bot.hears(['🔴 Запись встреч', '/record'], async (ctx) => {
 
     await saveUser(ctx.chat.id, { state: 'wait_for_link' });
     await ctx.replyWithHTML(
-        `<b>Запись встреч</b>\n\nПришлите ссылку на встречу в формате: <code>https://telemost.yandex.ru/j/XXXXXXXXXXXXXX</code>\n\nБот сам зайдет в звонок под именем <b>${user.bot_name || 'Бот-Ассистент'}</b> и начнет запись.${warning}`,
+        `<b>Запись встреч</b>\n\nПришлите ссылку на встречу:\n🟣 <b>Яндекс.Телемост:</b> <code>https://telemost.yandex.ru/j/...</code>\n🟢 <b>Google Meet:</b> <code>https://meet.google.com/...</code>\n🔵 <b>Zoom:</b> <code>https://zoom.us/j/...</code>\n\nБот сам зайдет в звонок под именем <b>${user.bot_name || 'Бот-Ассистент'}</b> и начнет запись.${warning}`,
         BACK_MENU
     );
 });
@@ -218,22 +219,21 @@ bot.on('text', async (ctx) => {
         }
     }
 
-    // Обработка ссылки Телемоста
-    const telemostMatch = text.match(/telemost\.yandex\.ru\/j\/(\d+)/);
-    if (telemostMatch) {
+    // Обработка ссылок на встречи (Телемост, Google Meet, Zoom)
+    const detected = detectPlatform(text);
+    if (detected.valid && detected.platform !== 'teams') {
         await saveUser(ctx.chat.id, { state: 'idle' });
-        const meetingId = telemostMatch[1];
+        const meetingId = detected.meetingId || 'meeting';
         const botName = user.bot_name || 'Бот-Ассистент';
         
-        const msg = await ctx.replyWithHTML(
-            `<b>Начинаем запись</b>\n\nБот заходит на встречу. Вы можете остановить запись кнопкой ниже.`,
+        await ctx.replyWithHTML(
+            `<b>Начинаем запись (${detected.icon} ${detected.displayName})</b>\n\nБот <b>${botName}</b> подключается к встрече. Вы можете остановить запись кнопкой ниже.`,
             Markup.inlineKeyboard([
                 Markup.button.callback('Остановить', `stop_${meetingId}`)
             ])
         );
 
-        // Spawn run.js
-        console.log(`Spawning run.js with URL ${text}`);
+        console.log(`[bot] Запуск run.js для ${detected.platform}: ${text}`);
         const env = { ...process.env, BOT_DISPLAY_NAME: botName, CHAT_ID: String(ctx.chat.id) };
         if (user.yandex_user && user.yandex_pass) {
             env.YANDEX_USER = user.yandex_user;
@@ -251,7 +251,7 @@ bot.on('text', async (ctx) => {
 
     if (user.state === 'wait_for_link') {
         return ctx.replyWithHTML(
-            `❌ <b>Неверная ссылка</b>\n\nВы прислали текст, который не похож на ссылку Телемоста.\nПример правильной ссылки: <code>https://telemost.yandex.ru/j/12345678901234</code>`,
+            `❌ <b>Неверная ссылка</b>\n\nСейчас поддерживаются ссылки Яндекс.Телемоста, Google Meet и Zoom.`,
             BACK_MENU
         );
     }
