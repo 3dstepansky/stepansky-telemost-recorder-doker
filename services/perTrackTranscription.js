@@ -253,7 +253,7 @@ function findValidTrackFiles(recordingDir, { minBytes = 1 } = {}) {
 function mergeTrackUtterances(trackResults) {
   const utterances = [];
 
-  for (const trackResult of trackResults) {
+  for (const [trackIndex, trackResult] of trackResults.entries()) {
     const offsetSeconds = (trackResult.metadata.recordingOffsetMs || 0) / 1000;
     const sourceUtterances = Array.isArray(trackResult.result?.utterances) ? trackResult.result.utterances : [];
 
@@ -262,7 +262,11 @@ function mergeTrackUtterances(trackResults) {
       const localEnd = isFiniteNumber(utterance.end) ? utterance.end : localStart;
       const start = roundSeconds(Math.max(0, localStart + offsetSeconds));
       const end = roundSeconds(Math.max(start, localEnd + offsetSeconds));
-      const speakerName = safeSpeakerName(trackResult.metadata);
+      const metadataSpeakerName = safeSpeakerName(trackResult.metadata);
+      const asrSpeakerName = safeString(utterance.speaker);
+      const speakerName = isKnownName(metadataSpeakerName)
+        ? metadataSpeakerName
+        : (trackResults.length > 1 ? `Спикер ${trackIndex + 1}` : (asrSpeakerName || 'Спикер 1'));
       const confidenceInfo = enrichUtteranceConfidence(utterance, trackResult.metadata);
 
       utterances.push({

@@ -5,7 +5,7 @@ import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
 import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
 import { ingestTelemostToWikiRaw } from './services/wikiIngest.js';
-import { saveMeetingResult } from './services/mongoMemory.js';
+import { saveMeetingResult, addResultMessageId } from './services/mongoMemory.js';
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -36,8 +36,10 @@ const filePath = process.argv[2];
 const targetDirName = process.argv[3]; // Ожидаем имя папки из Шага 1
 const title = process.argv[4] || 'Без названия';
 const chatId = process.argv[5] || 'unknown';
-const yandexUser = process.env.YANDEX_USER || process.argv[6];
-const yandexPassword = process.env.YANDEX_WEBDAV_PASSWORD || process.argv[7];
+const sourceMessageId = process.argv[6] || '';
+const sourceFileId = process.argv[7] || '';
+const yandexUser = process.env.YANDEX_USER || process.argv[8];
+const yandexPassword = process.env.YANDEX_WEBDAV_PASSWORD || process.argv[9];
 
 if (!filePath || !targetDirName) {
   console.log(JSON.stringify({ error: "Путь к файлу или имя целевой папки не переданы" }));
@@ -77,11 +79,29 @@ async function run() {
     if (!Array.isArray(transcriptionResult.utterances)) {
       transcriptionResult.utterances = [];
     }
-    if (typeof transcriptionResult.text !== 'string') {
-      transcriptionResult.text = transcriptionResult.utterances.map(u => `${u.speaker || 'unknown'}: ${u.text || ''}`).join('\n').trim();
+    // Всегда собираем человекочитаемый текст из utterances: API часто возвращает
+    // result.text без подписей спикеров, из-за чего файл теряет диаризацию.
+    if (transcriptionResult.utterances.length > 0) {
+      transcriptionResult.text = transcriptionResult.utterances
+        .map(u => `${u.speaker || 'Спикер'}: ${u.text || ''}`)
+        .join('\n')
+        .trim();
+    } else if (typeof transcriptionResult.text !== 'string') {
+      transcriptionResult.text = '';
     }
 
-    // 3. Создание текстового файла с транскрипцией
+    // 3. Выгрузка исходной записи на Яндекс.Диск (для записи встречи это уже
+    // сделано run.js; для загруженного Telegram-файла — нет).
+    if (yandexUser && yandexPassword && targetDirName.startsWith('telegram-')) {
+      console.error(`[system] Выгрузка исходного файла на Яндекс.Диск...`);
+      try {
+        await uploadToYandexDisk(resolvedPath, targetDirName, path.basename(resolvedPath), yandexUser, yandexPassword);
+      } catch (e) {
+        console.error(`[error] Ошибка Яндекс.Диска для исходного файла:`, e.message);
+      }
+    }
+
+    // 4. Создание текстового файла с транскрипцией
     const txtFileName = 'transcript.txt';
     const txtFilePath = path.join(path.dirname(resolvedPath), txtFileName);
     fs.writeFileSync(txtFilePath, transcriptionResult.text);
@@ -133,6 +153,8 @@ async function run() {
           transcriptionResult,
           recordingPath: resolvedPath,
           folderName: targetDirName,
+          sourceMessageId,
+          sourceFileId,
         });
         console.error(`[mongo] Результат встречи сохранён: ${mongoMeeting._id}`);
       } catch (mongoErr) {
@@ -212,7 +234,7 @@ async function run() {
       title: title,
       chat_id: chatId,
       target_dir_name: activeDirName,
-      audio_file: `Yandex.Telemost.Records/${activeDirName}/meeting_audio.webm`,
+      audio_file: `Yandex.Telemost.Records/${activeDirName}/${path.basename(resolvedPath)}`,
       transcript_file: `Yandex.Telemost.Records/${activeDirName}/transcript.txt`,
       summary_file: `Yandex.Telemost.Records/${activeDirName}/summary.txt`,
       wiki_raw_ingest: wikiRawIngest,
@@ -242,23 +264,31 @@ async function run() {
       const summaryChunks = splitTelegramText(formattedSummary, 3900 - header.length);
       try {
         for (let i = 0; i < summaryChunks.length; i++) {
-          const replyMarkup = i === summaryChunks.length - 1
-            ? (mongoMeeting ? {
-                inline_keyboard: [[{ text: '🧠 Векторизовать разговор', callback_data: `vectorize_${mongoMeeting._id}` }]]
-              } : undefined)
+          const replyMarkup = i === summaryChunks.length - 1 && mongoMeeting
+            ? {
+                inline_keyboard: [[
+                  { text: '📄 Открыть транскрипт', callback_data: `transcript_${mongoMeeting._id}` },
+                  { text: '🧠 Векторизовать', callback_data: `vectorize_${mongoMeeting._id}` }
+                ]]
+              }
             : undefined;
-          await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          const response = await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
             chat_id: chatId,
             text: i === 0 ? header + summaryChunks[i] : `<b>Продолжение саммари:</b>\n${summaryChunks[i]}`,
             parse_mode: 'HTML',
+            reply_to_message_id: Number(sourceMessageId) || undefined,
+            allow_sending_without_reply: true,
             reply_markup: replyMarkup
           });
+          if (mongoMeeting && response.data?.result?.message_id) {
+            await addResultMessageId(String(mongoMeeting._id), chatId, response.data.result.message_id);
+          }
         }
 
         await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           chat_id: chatId,
           text: mongoMeeting
-            ? 'Результаты встречи сохранены. Векторизация выполняется только по кнопке выше.'
+            ? 'Результаты сохранены. Векторизация доступна только по кнопке.'
             : 'Результаты встречи обработаны.',
           reply_markup: {
             keyboard: [
@@ -269,8 +299,7 @@ async function run() {
           }
         });
 
-        console.error(`[system] Отправка файлов в Telegram...`);
-        if (finalMp3Path) await sendFileToTelegram(botToken, chatId, finalMp3Path, 'audio');
+        console.error(`[system] Отправка текстовых результатов в Telegram...`);
         await sendFileToTelegram(botToken, chatId, summaryFilePath, 'document');
         await sendFileToTelegram(botToken, chatId, txtFilePath, 'document');
       } catch (tgErr) {

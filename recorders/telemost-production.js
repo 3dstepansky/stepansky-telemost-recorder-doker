@@ -13,6 +13,7 @@ import {
   existsSync,
   mkdirSync,
   chmodSync,
+  readFileSync,
 } from "fs";
 import { resolve, dirname } from "path";
 import { tmpdir } from "os";
@@ -23,7 +24,12 @@ dotenv.config();
 
 const joinUrl = process.argv[2];
 const meetingIdStr = joinUrl ? joinUrl.split('/').pop().replace(/[^a-zA-Z0-9_-]/g, '') : 'default';
-const userDataDir = resolve(tmpdir(), `puppeteer_telemost_${meetingIdStr}_${Date.now()}`);
+const persistentProfileDir = process.env.TELEMOST_USER_DATA_DIR?.trim();
+const userDataDir = persistentProfileDir
+  ? resolve(persistentProfileDir)
+  : resolve(tmpdir(), `puppeteer_telemost_${meetingIdStr}_${Date.now()}`);
+const usesPersistentProfile = Boolean(persistentProfileDir);
+const storageStatePath = process.env.YANDEX_STORAGE_STATE?.trim();
 
 const isCreateMode = joinUrl === '--create';
 const outputFile = isCreateMode ? null : process.argv[3];
@@ -54,13 +60,8 @@ if (!isCreateMode) {
   try { chmodSync(tracksDir, 0o777); } catch(e) { console.error(e); }
   try { chmodSync(metaDir, 0o777); } catch(e) { console.error(e); }
   
-  // Очистка старого файла микса
-  writeFileSync(outputPath, "");
-  // Создание track_events.ndjson
-  writeFileSync(resolve(metaDir, "track_events.ndjson"), "");
-
-  try { chmodSync(outputPath, 0o666); } catch(e) { console.error(e); }
-  try { chmodSync(resolve(metaDir, "track_events.ndjson"), 0o666); } catch(e) { console.error(e); }
+  // Аудиофайлы создаются только после подтверждённого входа во встречу.
+  // Диагностические файлы при ошибке входа могут быть записаны в metaDir.
 
   console.log(`[recorder] join_url: ${joinUrl}`);
   console.log(`[recorder] output:   ${outputPath}`);
@@ -95,6 +96,37 @@ const browser = await puppeteer.launch({
 
 const page = await browser.newPage();
 
+async function importYandexStorageState() {
+  if (!storageStatePath) return;
+  if (!existsSync(storageStatePath)) {
+    throw new Error(`Файл Yandex storage state не найден: ${storageStatePath}`);
+  }
+
+  const state = JSON.parse(readFileSync(storageStatePath, "utf8"));
+  const now = Math.floor(Date.now() / 1000);
+  const cookies = (state.cookies || [])
+    .filter((cookie) => !cookie.expires || cookie.expires < 0 || cookie.expires > now)
+    .map((cookie) => {
+      const normalized = {
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path || "/",
+        secure: Boolean(cookie.secure),
+        httpOnly: Boolean(cookie.httpOnly),
+      };
+      if (cookie.expires && cookie.expires > 0) normalized.expires = Math.floor(cookie.expires);
+      if (["Strict", "Lax", "None"].includes(cookie.sameSite)) normalized.sameSite = cookie.sameSite;
+      return normalized;
+    });
+
+  if (!cookies.length) throw new Error(`В ${storageStatePath} нет действующих cookies`);
+  await page.setCookie(...cookies);
+  console.log(`[recorder] Импортирована сохранённая Яндекс-сессия: ${cookies.length} cookies`);
+}
+
+await importYandexStorageState();
+
 await page.setUserAgent(
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 );
@@ -127,6 +159,63 @@ await page.exposeFunction("__saveTracksSummary", (summaryObj) => {
   const summaryPath = resolve(metaDir, "tracks_summary.json");
   writeFileSync(summaryPath, JSON.stringify(summaryObj, null, 2));
 });
+
+async function inspectJoinUi() {
+  return page.evaluate(() => ({
+    url: location.href,
+    bodyText: document.body?.innerText?.slice(0, 4000) || '',
+    controls: [...document.querySelectorAll('button, [role="button"], a, input, [contenteditable="true"]')]
+      .map((element) => ({
+        tag: element.tagName,
+        text: (element.innerText || element.value || '').trim().slice(0, 240),
+        ariaLabel: element.getAttribute('aria-label'),
+        placeholder: element.getAttribute('placeholder'),
+        testId: element.getAttribute('data-testid'),
+        disabled: Boolean(element.disabled)
+      }))
+      .slice(0, 120)
+  }));
+}
+
+async function writeJoinDiagnostics(reason) {
+  if (isCreateMode || !metaDir) return;
+  try {
+    const diagnostic = await inspectJoinUi();
+    diagnostic.reason = reason;
+    diagnostic.capturedAt = new Date().toISOString();
+    writeFileSync(resolve(metaDir, 'join_diagnostic.json'), JSON.stringify(diagnostic, null, 2));
+    await page.screenshot({ path: resolve(metaDir, 'join_diagnostic.png'), fullPage: true });
+  } catch (error) {
+    console.error(`[recorder] Не удалось сохранить диагностику входа: ${error.message}`);
+  }
+}
+
+async function assertMeetingJoined() {
+  const state = await page.evaluate(() => {
+    const bodyText = document.body?.innerText || '';
+    const controls = [...document.querySelectorAll('button, [role="button"], a')];
+    const hasAccountGate = /войдите в аккаунт/i.test(bodyText)
+      && controls.some((element) => /^войти$/i.test(
+        (element.innerText || element.getAttribute('aria-label') || '').trim()
+      ));
+    const hasLeaveControl = controls.some((element) => /покинуть встречу|завершить звонок|leave call/i.test(
+      `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`
+    ));
+    return { hasAccountGate, hasLeaveControl, url: location.href };
+  });
+
+  if (state.hasAccountGate) {
+    await writeJoinDiagnostics('account-required');
+    throw new Error(
+      'Telemost требует авторизацию Яндекс ID. Авторизуйте постоянный профиль браузера в /app/data/telemost-profile.'
+    );
+  }
+
+  if (!state.hasLeaveControl) {
+    await writeJoinDiagnostics('join-not-confirmed');
+    throw new Error(`Не удалось подтвердить вход во встречу. Текущий URL: ${state.url}`);
+  }
+}
 
 // МОНКИ-ПАТЧИНГ WebRTC (Dual-Output: микс + отдельные треки + AnalyserNode)
 await page.evaluateOnNewDocument(() => {
@@ -508,14 +597,17 @@ try {
     }
   } catch (e) {}
 
-  // 2. Ищем поле ввода имени
+  // 2. Ищем поле ввода имени (старый гостевой UI Телемоста)
   const nameInput = await page.evaluateHandle(() => {
-    const labels = [...document.querySelectorAll('div, span, p')];
-    const nameLabel = labels.find(el => el.textContent.includes('Ваше имя на встрече'));
+    const labels = [...document.querySelectorAll('div, span, p, label')];
+    const nameLabel = labels.find(el => /ваше имя на встрече|как вас зовут/i.test(el.textContent || ''));
     if (nameLabel && nameLabel.parentElement) {
-      return nameLabel.parentElement.querySelector('input, [contenteditable="true"]');
+      const nearbyInput = nameLabel.parentElement.querySelector('input, [contenteditable="true"]');
+      if (nearbyInput) return nearbyInput;
     }
-    return document.querySelector('input[placeholder*="имя"], .name-input input');
+    return document.querySelector(
+      'input[placeholder*="имя" i], input[aria-label*="имя" i], .name-input input'
+    );
   });
 
   if (nameInput && nameInput.asElement()) {
@@ -529,24 +621,51 @@ try {
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  // 3. Выключаем мик и камеру перед входом
+  // 3. Выключаем микрофон и камеру перед входом, поддерживая старую и новую разметку.
   await page.evaluate(() => {
-    const mic = document.querySelector('[data-testid="turn-off-mic-button"]');
-    if (mic) mic.click();
-    const cam = document.querySelector('[data-testid="turn-off-camera-button"]');
-    if (cam) cam.click();
+    const buttons = [...document.querySelectorAll('button, [role="button"]')];
+    const clickByLabel = (pattern) => {
+      const button = buttons.find((element) => pattern.test(
+        `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`
+      ));
+      if (button) button.click();
+    };
+
+    const oldMic = document.querySelector('[data-testid="turn-off-mic-button"]');
+    if (oldMic) oldMic.click();
+    else clickByLabel(/выключить микрофон|turn off microphone|mute microphone/i);
+
+    const oldCam = document.querySelector('[data-testid="turn-off-camera-button"]');
+    if (oldCam) oldCam.click();
+    else clickByLabel(/выключить камер|turn off camera|disable camera/i);
   });
 
-  // 4. Кнопка "Присоединиться"
+  // 4. Кнопка входа. Не путаем её с глобальной кнопкой авторизации Яндекс 360.
   const joinBtn = await page.evaluateHandle(() => {
-    const buttons = [...document.querySelectorAll("button, [role='button']")];
-    return buttons.find((b) => /подключиться|присоединиться|join/i.test(b.textContent));
+    const buttons = [...document.querySelectorAll('button, [role="button"]')];
+    return buttons.find((element) => {
+      const text = (element.innerText || element.getAttribute('aria-label') || '').trim();
+      return /^(подключиться|присоединиться|join|join meeting)$/i.test(text);
+    });
   });
 
   if (joinBtn && joinBtn.asElement()) {
     await page.evaluate((el) => el.click(), joinBtn);
     console.log("[recorder] Кнопка входа нажата!");
+    await new Promise(r => setTimeout(r, 5000));
   }
+
+  await assertMeetingJoined();
+
+  if (!isCreateMode) {
+    // Создаём пустые артефакты только после подтверждённого входа, чтобы не принимать
+    // отказ авторизации за успешную, но пустую запись.
+    writeFileSync(outputPath, "");
+    writeFileSync(resolve(metaDir, "track_events.ndjson"), "");
+    try { chmodSync(outputPath, 0o666); } catch(e) { console.error(e); }
+    try { chmodSync(resolve(metaDir, "track_events.ndjson"), 0o666); } catch(e) { console.error(e); }
+  }
+  console.log('[recorder] Вход во встречу подтверждён.');
 
   // --- МОНИТОР ПРИСУТСТВИЯ ---
   const MAX_IDLE_MINS = parseInt(process.env.MAX_IDLE_MINS || "2");
@@ -613,18 +732,23 @@ try {
 
 } catch (error) {
   console.error("[error] Критическая ошибка рекордера:", error.message);
+  process.exitCode = 1;
 } finally {
   console.log("[system] Финальное закрытие браузера...");
   if (browser) await browser.close();
-  try {
-      if (fs.existsSync(userDataDir)) {
-          fs.rmSync(userDataDir, { recursive: true, force: true });
-          console.log("[system] Временная папка профиля удалена.");
-      }
-  } catch(e) {
-      console.error("[error] Ошибка удаления userDataDir:", e.message);
+  if (!usesPersistentProfile) {
+    try {
+        if (fs.existsSync(userDataDir)) {
+            fs.rmSync(userDataDir, { recursive: true, force: true });
+            console.log("[system] Временная папка профиля удалена.");
+        }
+    } catch(e) {
+        console.error("[error] Ошибка удаления userDataDir:", e.message);
+    }
+  } else {
+    console.log(`[system] Постоянный профиль браузера сохранён: ${userDataDir}`);
   }
-  process.exit(0);
+  process.exitCode = process.exitCode || 0;
 }
 
 // ФУНКЦИЯ ДЛЯ ЧИСТОЙ ОСТАНОВКИ

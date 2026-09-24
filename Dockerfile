@@ -1,7 +1,8 @@
 # Используем официальный образ Node.js (slim версия для уменьшения размера)
 FROM node:20-slim
 
-# Установка зависимостей системных библиотек для работы Chromium в Docker
+# Установка зависимостей системных библиотек для работы Chromium в Docker.
+# Точную установленную версию сохраняем в build-info для диагностики обновлений контейнера.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     dumb-init \
@@ -22,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxdamage1 \
     libxrandr2 \
     xdg-utils \
+    && chromium --version > /usr/local/share/telemost-recorder-build-info.txt \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Настройка переменных окружения для Puppeteer

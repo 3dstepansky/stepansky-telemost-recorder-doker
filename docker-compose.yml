@@ -1,10 +1,35 @@
 services:
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: telemost-telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "1"
+    networks:
+      - default
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+
   recorder:
-    build: .
+    build:
+      context: .
     container_name: telemost-recorder
+    restart: unless-stopped
+    depends_on:
+      - telegram-bot-api
     volumes:
       - ./recordings:/app/recordings
+      - ./data/telemost-profile:/app/data/telemost-profile
+      - /home/ubuntu/.ya_browser_state.json:/run/secrets/yandex-storage-state.json:ro
       - /home/ubuntu/baza:/home/ubuntu/baza
+      - telegram-bot-api-data:/var/lib/telegram-bot-api:ro
+    environment:
+      TELEGRAM_BOT_API_URL: http://telegram-bot-api:8081
+      TELEGRAM_UPLOAD_MAX_BYTES: 2000000000
+      TELEMOST_USER_DATA_DIR: /app/data/telemost-profile
+      YANDEX_STORAGE_STATE: /run/secrets/yandex-storage-state.json
     env_file:
       - .env
     networks:
@@ -16,3 +41,6 @@ services:
 networks:
   n8n_default:
     external: true
+
+volumes:
+  telegram-bot-api-data:

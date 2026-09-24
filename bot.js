@@ -6,12 +6,37 @@ import fs from 'fs';
 import { initDB, getUser, saveUser, getRecentMeetings } from './db.js';
 import { checkYandexDiskConnection } from './services/webdav.js';
 import { vectorizeMeeting } from './services/vectorize.js';
-import { ensureMongoIndexes } from './services/mongoMemory.js';
+import { ensureMongoIndexes, getRecentMeetingsForChat, getMeetingForChat } from './services/mongoMemory.js';
+import { formatMeetingList } from './services/meetingList.js';
+import { escapeTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
 import { detectPlatform } from './services/platform-detector.js';
 
 dotenv.config();
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
+    telegram: process.env.TELEGRAM_BOT_API_URL
+        ? { apiRoot: process.env.TELEGRAM_BOT_API_URL }
+        : undefined,
+});
+let botUsername = process.env.TELEGRAM_BOT_USERNAME || '';
+
+async function downloadTelegramMedia(ctx, media, outputPath) {
+    const file = await ctx.telegram.getFile(media.file_id);
+    if (!file.file_path) throw new Error('Telegram не вернул путь к файлу');
+
+    // В local mode Telegram Bot API возвращает абсолютный путь внутри своего
+    // контейнера. Оба контейнера используют общий volume, поэтому копируем
+    // файл напрямую, не пытаясь fetch() этот локальный путь как URL.
+    if (path.isAbsolute(file.file_path)) {
+        fs.copyFileSync(file.file_path, outputPath);
+        return;
+    }
+
+    const fileLink = await ctx.telegram.getFileLink(media.file_id);
+    const response = await fetch(fileLink.href);
+    if (!response.ok) throw new Error(`Telegram вернул HTTP ${response.status}`);
+    fs.writeFileSync(outputPath, Buffer.from(await response.arrayBuffer()));
+}
 
 const MAIN_MENU = Markup.keyboard([
     ['🔴 Запись встреч', '🧠 Аналитика и ИИ'],
@@ -94,7 +119,9 @@ bot.hears(['ℹ️ Помощь', '/help'], async (ctx) => {
 // 6. Список встреч
 bot.hears(['📂 Список встреч', '/meetings', '/list'], async (ctx) => {
     await saveUser(ctx.chat.id, { state: 'idle' });
-    const meetings = await getRecentMeetings(ctx.chat.id, 5);
+    const meetings = process.env.MONGODB_URI
+        ? await getRecentMeetingsForChat(ctx.chat.id, 5)
+        : await getRecentMeetings(ctx.chat.id, 5);
     
     if (meetings.length === 0) {
         return ctx.replyWithHTML(
@@ -103,13 +130,11 @@ bot.hears(['📂 Список встреч', '/meetings', '/list'], async (ctx) 
         );
     }
 
-    let text = `<b>Последние встречи:</b>\n\n`;
-    meetings.forEach((m, i) => {
-        const d = new Date(m.transcribed_at).toLocaleString('ru-RU');
-        text += `${i + 1}. <b>${m.title || 'Встреча'}</b> (${d})\nФайл: <code>${m.file_path || 'Нет файла'}</code>\n\n`;
-    });
-
-    await ctx.replyWithHTML(text, AI_MENU);
+    await ctx.replyWithHTML(formatMeetingList(meetings), Markup.inlineKeyboard(
+        meetings.map((meeting, index) => ([
+            Markup.button.callback(`📄 ${index + 1}. Открыть транскрипт`, `transcript_${meeting._id}`)
+        ]))
+    ));
 });
 
 // 7. Сделать саммари (Заглушка)
@@ -119,10 +144,12 @@ bot.hears('💡 Сделать саммари', async (ctx) => {
     );
 });
 
-// 8. Транскрибировать (Заглушка)
+// 8. Транскрибировать загруженный аудио/видеофайл
 bot.hears('📝 Транскрибировать', async (ctx) => {
+    await saveUser(ctx.chat.id, { state: 'wait_for_media' });
     await ctx.replyWithHTML(
-        `Запрос отправлен.`
+        `<b>Пришлите файл для транскрибации</b>\n\nПодойдут аудио, видео, голосовое сообщение или файл-документ. Я пришлю саммари и текстовый транскрипт ответом на исходный файл. Векторизация запускается отдельно кнопкой.`,
+        BACK_MENU
     );
 });
 
@@ -262,12 +289,118 @@ bot.on('text', async (ctx) => {
     );
 });
 
-// Обработка не-текстовых сообщений (фото, стикеры, голосовые)
+// Обработка загруженных аудио/видеофайлов
 bot.on('message', async (ctx) => {
-    if (!ctx.message.text) {
+    if (ctx.message.text) return;
+
+    const user = await getUser(ctx.chat.id);
+    const media = ctx.message.document || ctx.message.audio || ctx.message.video || ctx.message.voice;
+
+    if (user.state !== 'wait_for_media') {
         return ctx.replyWithHTML(
-            `⚠️ Я понимаю только текстовые сообщения и ссылки.\nПожалуйста, используйте кнопки меню.`,
-            MAIN_MENU
+            `Чтобы обработать файл, сначала нажмите <b>📝 Транскрибировать</b>.`,
+            AI_MENU
+        );
+    }
+
+    if (!media?.file_id) {
+        return ctx.replyWithHTML(
+            `❌ Пришлите аудио, видео, голосовое сообщение или файл-документ.`,
+            BACK_MENU
+        );
+    }
+
+    const maxBytes = Number(process.env.TELEGRAM_UPLOAD_MAX_BYTES || 2000000000);
+    if (media.file_size && media.file_size > maxBytes) {
+        return ctx.replyWithHTML(
+            `❌ Файл превышает настроенный лимит: <b>${Math.floor(maxBytes / 1000000)} МБ</b>.`,
+            BACK_MENU
+        );
+    }
+
+    await saveUser(ctx.chat.id, { state: 'processing_media' });
+    const status = await ctx.replyWithHTML(`⏳ <b>Файл получен.</b> Загружаю и запускаю транскрибацию…`);
+
+    const sourceName = media.file_name || `telegram-${media.file_unique_id || Date.now()}.${ctx.message.voice ? 'ogg' : (ctx.message.video ? 'mp4' : 'bin')}`;
+    const safeBase = path.basename(sourceName).replace(/[^a-zA-Z0-9а-яА-ЯёЁ._-]+/g, '_');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const targetDirName = `telegram-${ctx.chat.id}-${stamp}`;
+    const recordingDir = path.resolve('recordings', targetDirName);
+    const extension = path.extname(safeBase) || '.bin';
+    const localPath = path.join(recordingDir, `meeting_audio${extension}`);
+    fs.mkdirSync(recordingDir, { recursive: true });
+
+    try {
+        await downloadTelegramMedia(ctx, media, localPath);
+        const actualSize = fs.statSync(localPath).size;
+        if (actualSize > maxBytes) throw new Error(`Файл превышает лимит ${Math.floor(maxBytes / 1000000)} МБ`);
+
+        const title = path.parse(safeBase).name || 'Загруженная запись';
+        const env = { ...process.env };
+        if (user.yandex_user && user.yandex_pass) {
+            env.YANDEX_USER = user.yandex_user;
+            env.YANDEX_WEBDAV_PASSWORD = user.yandex_pass;
+        }
+
+        const child = spawn('node', [
+            'transcribe.js', localPath, targetDirName, title, String(ctx.chat.id),
+            String(ctx.message.message_id), String(media.file_id)
+        ], { env, stdio: 'inherit' });
+
+        child.on('error', async (error) => {
+            console.error('[file-transcribe] Ошибка запуска:', error.message);
+            await saveUser(ctx.chat.id, { state: 'wait_for_media' });
+            await ctx.replyWithHTML(`❌ <b>Не удалось запустить обработку файла.</b>\n<code>${String(error.message).replace(/[<>&]/g, '')}</code>`, BACK_MENU);
+        });
+        child.on('exit', async (code) => {
+            await saveUser(ctx.chat.id, { state: code === 0 ? 'idle' : 'wait_for_media' });
+            if (code !== 0) {
+                await ctx.replyWithHTML(`❌ <b>Обработка файла завершилась с ошибкой.</b> Попробуйте другой файл.`, BACK_MENU);
+            }
+        });
+
+        await ctx.telegram.editMessageText(
+            ctx.chat.id,
+            status.message_id,
+            undefined,
+            `✅ <b>Файл принят.</b> Транскрибация и саммари выполняются; результат придёт сюда автоматически.`,
+            { parse_mode: 'HTML' }
+        );
+    } catch (error) {
+        console.error('[file-upload] Ошибка:', error.message);
+        await saveUser(ctx.chat.id, { state: 'wait_for_media' });
+        fs.rmSync(recordingDir, { recursive: true, force: true });
+        await ctx.telegram.editMessageText(
+            ctx.chat.id,
+            status.message_id,
+            undefined,
+            `❌ <b>Не удалось загрузить файл.</b>\n<code>${String(error.message).replace(/[<>&]/g, '')}</code>`,
+            { parse_mode: 'HTML' }
+        );
+    }
+});
+
+bot.action(/transcript_([a-f0-9]{24})/, async (ctx) => {
+    const meetingId = ctx.match[1];
+    const meeting = await getMeetingForChat(meetingId, ctx.chat.id);
+    if (!meeting) return ctx.answerCbQuery('Транскрипт не найден', { show_alert: true });
+
+    await ctx.answerCbQuery('Открываю транскрипт…');
+    const header = `<b>${escapeTelegramHtml(meeting.title || 'Транскрипт')}</b>\n\n`;
+    const chunks = splitTelegramText(escapeTelegramHtml(meeting.transcript || 'Транскрипт пуст.'), 3900 - header.length);
+    for (let i = 0; i < chunks.length; i++) {
+        await ctx.replyWithHTML(
+            `${i === 0 ? header : '<b>Продолжение транскрипта:</b>\n'}${chunks[i]}`,
+            {
+                reply_to_message_id: meeting.sourceMessageId || undefined,
+                allow_sending_without_reply: true,
+                ...Markup.inlineKeyboard([[
+                    Markup.button.callback(
+                        meeting.vectorizationStatus === 'completed' ? '✅ Векторизовано' : '🧠 Векторизовать',
+                        meeting.vectorizationStatus === 'completed' ? 'vectorized' : `vectorize_${meetingId}`
+                    )
+                ]])
+            }
         );
     }
 });
@@ -340,6 +473,8 @@ bot.action(/stop_(.+)/, async (ctx) => {
             await ensureMongoIndexes();
             console.log('MongoDB Atlas подключена, индексы готовы');
         }
+        const me = await bot.telegram.getMe();
+        botUsername = botUsername || me.username;
         bot.launch().then(() => console.log('Бот успешно запущен')).catch(e => console.error('Ошибка запуска бота', e));
     } catch (err) {
         console.error('Failed to initialize DB:', err);

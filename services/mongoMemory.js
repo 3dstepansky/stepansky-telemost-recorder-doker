@@ -26,6 +26,7 @@ export async function ensureMongoIndexes() {
   await Promise.all([
     db.collection('meetings').createIndex({ chatId: 1, createdAt: -1 }),
     db.collection('meetings').createIndex({ sourceMeetingId: 1, chatId: 1 }),
+    db.collection('meetings').createIndex({ chatId: 1, sourceMessageId: 1 }),
     db.collection('meetings').createIndex({ vectorizationStatus: 1, createdAt: -1 }),
     db.collection('people').createIndex({ normalizedName: 1 }, { unique: true, sparse: true }),
     db.collection('transcript_chunks').createIndex({ meetingId: 1, chunkIndex: 1 }, { unique: true }),
@@ -38,7 +39,7 @@ function collectSpeakers(transcriptionResult = {}) {
   const names = new Set();
   for (const utterance of transcriptionResult.utterances || []) {
     const name = String(utterance.speakerName || utterance.speaker || '').trim();
-    if (name && !/^speaker\s*[a-z0-9]+$/i.test(name)) names.add(name);
+    if (name && name.toLowerCase() !== 'unknown' && !/^speaker\s*[a-z0-9]+$/i.test(name)) names.add(name);
   }
   return [...names];
 }
@@ -52,6 +53,8 @@ export async function saveMeetingResult({
   transcriptionResult,
   recordingPath,
   folderName,
+  sourceMessageId,
+  sourceFileId,
 }) {
   const db = await getMongoDb();
   await ensureMongoIndexes();
@@ -69,6 +72,8 @@ export async function saveMeetingResult({
     utteranceCount: transcriptionResult?.utteranceCount ?? transcriptionResult?.utterances?.length ?? 0,
     recordingPath: recordingPath || null,
     folderName: folderName || null,
+    sourceMessageId: Number(sourceMessageId) || null,
+    sourceFileId: sourceFileId || null,
     vectorizationStatus: 'not_requested',
     vectorizedAt: null,
     updatedAt: now,
@@ -98,6 +103,29 @@ export async function getMeetingForChat(meetingId, chatId) {
   if (!ObjectId.isValid(meetingId)) return null;
   const db = await getMongoDb();
   return db.collection('meetings').findOne({ _id: new ObjectId(meetingId), chatId: String(chatId) });
+}
+
+export async function getRecentMeetingsForChat(chatId, limit = 5) {
+  const db = await getMongoDb();
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 5, 20));
+  return db.collection('meetings')
+    .find({ chatId: String(chatId) })
+    .sort({ createdAt: -1, updatedAt: -1 })
+    .limit(safeLimit)
+    .toArray();
+}
+
+export async function addResultMessageId(meetingId, chatId, messageId) {
+  if (!ObjectId.isValid(meetingId) || !Number(messageId)) return false;
+  const db = await getMongoDb();
+  const result = await db.collection('meetings').updateOne(
+    { _id: new ObjectId(meetingId), chatId: String(chatId) },
+    {
+      $addToSet: { resultMessageIds: Number(messageId) },
+      $set: { updatedAt: new Date() },
+    },
+  );
+  return result.matchedCount > 0;
 }
 
 export async function setVectorizationStatus(meetingId, status, extra = {}) {

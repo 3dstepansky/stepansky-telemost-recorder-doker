@@ -11,6 +11,36 @@ import {
 } from '../services/perTrackTranscription.js';
 import { createVoiceprintSession, VoiceprintSession } from '../services/voiceprintSession.js';
 
+test('mergeTrackUtterances replaces unknown metadata with stable per-track speaker labels', () => {
+  const merged = mergeTrackUtterances([{
+    trackId: 'track-unknown',
+    metadata: {
+      speakerName: 'unknown',
+      displayName: null,
+      participantId: null,
+      confidence: 0,
+      recordingOffsetMs: 0,
+    },
+    result: {
+      utterances: [{ speaker: 'Спикер A', text: 'Привет', start: 0, end: 1 }],
+    },
+  }, {
+    trackId: 'track-unknown-2',
+    metadata: {
+      speakerName: 'unknown',
+      displayName: null,
+      participantId: null,
+      confidence: 0,
+      recordingOffsetMs: 0,
+    },
+    result: {
+      utterances: [{ speaker: 'Спикер A', text: 'Ответ', start: 2, end: 3 }],
+    },
+  }]);
+  assert.deepEqual(merged.map(item => item.speaker), ['Спикер 1', 'Спикер 2']);
+  assert.deepEqual(merged.map(item => item.original_speaker_label), ['Спикер A', 'Спикер A']);
+});
+
 function tempRecordingDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'telemost-cycle3-'));
   fs.mkdirSync(path.join(dir, 'tracks'));
