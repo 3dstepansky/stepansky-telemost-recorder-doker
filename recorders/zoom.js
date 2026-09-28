@@ -137,6 +137,37 @@ export class ZoomRecorder extends BaseMeetingRecorder {
     }).catch(() => {});
   }
 
+  async startMonitor() {
+    const startedAt = Date.now();
+    const maxDurationMs = this.maxDurationMins * 60 * 1000;
+    console.log(`[zoom] Монитор записи активен; максимальная длительность ${this.maxDurationMins} мин.`);
+
+    while (!this.isShuttingDown && Date.now() - startedAt < maxDurationMs) {
+      await sleep(2000);
+      if (this.isShuttingDown) return;
+
+      try {
+        const state = await this.readUiState();
+        const removed = /you have been removed|removed from the meeting|host has removed you|вас удалили|исключили из конференции/i.test(state.bodyText);
+        const ended = /meeting has ended|meeting was ended|встреча завершена|конференция завершена/i.test(state.bodyText);
+        if (removed || ended || !isZoomMeetingJoined(state)) {
+          console.log(`[zoom] Встреча завершена или ассистент покинул комнату (${removed ? 'removed' : ended ? 'ended' : 'meeting-ui-missing'}).`);
+          await this.stop();
+          return;
+        }
+      } catch (error) {
+        if (!this.isShuttingDown) {
+          console.warn(`[zoom] Ошибка проверки состояния встречи: ${error.message}`);
+        }
+      }
+    }
+
+    if (!this.isShuttingDown) {
+      console.log('[zoom] Достигнута максимальная длительность записи.');
+      await this.stop();
+    }
+  }
+
   async joinAndRecord() {
     await this.initBrowser();
     const detected = detectPlatform(this.joinUrl);

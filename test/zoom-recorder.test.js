@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ZoomRecorder,
   inspectZoomUiState,
   isZoomMeetingJoined,
   isZoomWaitingRoom,
@@ -51,4 +52,8 @@ test('waiting room is detected but not considered joined', () => {
   });
   assert.equal(isZoomWaitingRoom(state), true);
   assert.equal(isZoomMeetingJoined(state), false);
+});
+
+test('ZoomRecorder exposes a lifecycle monitor for active recordings', () => {
+  assert.equal(typeof ZoomRecorder.prototype.startMonitor, 'function');
 });
