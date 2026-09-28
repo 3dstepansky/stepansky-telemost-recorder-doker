@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  assertNonEmptyRecording,
   loadTrackMetadata,
   mergeTrackUtterances,
   transcribeTracks,
@@ -28,6 +29,17 @@ function writeSummary(dir, tracks) {
 function writeEvents(dir, events) {
   fs.writeFileSync(path.join(dir, 'meta', 'track_events.ndjson'), events.map((event) => JSON.stringify(event)).join('\n') + '\n');
 }
+
+test('assertNonEmptyRecording rejects a zero-byte meeting before ASR fallback', () => {
+  const dir = tempRecordingDir();
+  const recording = path.join(dir, 'meeting_audio.webm');
+  fs.writeFileSync(recording, '');
+
+  assert.throws(
+    () => assertNonEmptyRecording(recording),
+    /Запись встречи пуста: участники не подключились или в комнате не было аудио/,
+  );
+});
 
 test('mergeTrackUtterances merges tracks on one audio-relative timeline with deterministic order', () => {
   const merged = mergeTrackUtterances([

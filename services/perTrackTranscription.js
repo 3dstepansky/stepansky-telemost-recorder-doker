@@ -472,6 +472,14 @@ function applyMixedTrackEventSpeakerRemap(transcriptionResult, recordingDir) {
   return transcriptionResult;
 }
 
+function assertNonEmptyRecording(filePath) {
+  const stats = fs.statSync(filePath);
+  if (stats.size === 0) {
+    throw new Error('Запись встречи пуста: участники не подключились или в комнате не было аудио');
+  }
+  return stats;
+}
+
 async function transcribeAudioWithFallback(filePath, {
   singleTrack = false,
   assemblyFn = transcribeAudioAssemblyAI,
@@ -575,6 +583,7 @@ async function transcribeTracks(recordingDir, options = {}) {
 export {
   UNKNOWN_SPEAKER,
   DEFAULT_GROQ_SEGMENT_SECONDS,
+  assertNonEmptyRecording,
   findValidTrackFiles,
   formatTranscriptText,
   getTrackMetadata,

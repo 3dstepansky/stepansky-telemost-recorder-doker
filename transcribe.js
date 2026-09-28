@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { transcribeTracks, transcribeAudioWithFallback, applyMixedTrackEventSpeakerRemap } from './services/perTrackTranscription.js';
+import { assertNonEmptyRecording, transcribeTracks, transcribeAudioWithFallback, applyMixedTrackEventSpeakerRemap } from './services/perTrackTranscription.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
 import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
@@ -56,6 +56,8 @@ async function run() {
   }
 
   try {
+    assertNonEmptyRecording(resolvedPath);
+
     let transcriptionResult;
     let finalMp3Path = null;
 
@@ -69,6 +71,11 @@ async function run() {
       for (const failure of perTrackResult.track_diagnostics.failures) {
         console.error(`[warn] Ошибка ASR трека ${failure.trackId}: ${failure.error}`);
       }
+    } else if (perTrackResult.reason === 'no-track-speech' && perTrackResult.track_diagnostics.attempted > 0) {
+      // Валидные удалённые WebRTC-треки получены, но распознаваемой речи в них нет.
+      // Не переходим на повреждённый/пустой mixed-файл и не маскируем ситуацию
+      // вторичной ошибкой отсутствующего GROQ_API_KEY.
+      throw new Error('Встреча записана, но в аудиотреках не обнаружена речь');
     } else {
       console.error(`[system] Per-track транскрибация недоступна (${perTrackResult.reason}). Используем mixed fallback...`);
       const mixed = await transcribeAudioWithFallback(resolvedPath, { singleTrack: false });

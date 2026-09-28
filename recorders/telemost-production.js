@@ -24,12 +24,16 @@ dotenv.config();
 
 const joinUrl = process.argv[2];
 const meetingIdStr = joinUrl ? joinUrl.split('/').pop().replace(/[^a-zA-Z0-9_-]/g, '') : 'default';
-const persistentProfileDir = process.env.TELEMOST_USER_DATA_DIR?.trim();
+const persistentProfileDir = process.env.TELEMOST_FORCE_GUEST !== 'false'
+  ? null
+  : process.env.TELEMOST_USER_DATA_DIR?.trim();
 const userDataDir = persistentProfileDir
   ? resolve(persistentProfileDir)
   : resolve(tmpdir(), `puppeteer_telemost_${meetingIdStr}_${Date.now()}`);
 const usesPersistentProfile = Boolean(persistentProfileDir);
-const storageStatePath = process.env.YANDEX_STORAGE_STATE?.trim();
+const storageStatePath = process.env.TELEMOST_FORCE_GUEST !== 'false'
+  ? null
+  : process.env.YANDEX_STORAGE_STATE?.trim();
 
 const isCreateMode = joinUrl === '--create';
 const outputFile = isCreateMode ? null : process.argv[3];
@@ -86,6 +90,7 @@ const browser = await puppeteer.launch({
     "--disable-setuid-sandbox",
     "--autoplay-policy=no-user-gesture-required",
     "--use-fake-ui-for-media-stream",
+    "--use-fake-device-for-media-stream",
     "--disable-features=WebRtcHideLocalIpsWithMdns,ExternalProtocolDialog",
     "--disable-infobars",
     "--disable-external-intent-requests",
@@ -191,29 +196,59 @@ async function writeJoinDiagnostics(reason) {
 }
 
 async function assertMeetingJoined() {
-  const state = await page.evaluate(() => {
-    const bodyText = document.body?.innerText || '';
-    const controls = [...document.querySelectorAll('button, [role="button"], a')];
-    const hasAccountGate = /войдите в аккаунт/i.test(bodyText)
-      && controls.some((element) => /^войти$/i.test(
-        (element.innerText || element.getAttribute('aria-label') || '').trim()
-      ));
-    const hasLeaveControl = controls.some((element) => /покинуть встречу|завершить звонок|leave call/i.test(
-      `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`
-    ));
-    return { hasAccountGate, hasLeaveControl, url: location.href };
-  });
+  const frameStates = [];
+  for (const frame of page.frames()) {
+    try {
+      frameStates.push(await frame.evaluate(() => {
+        const bodyText = document.body?.innerText || '';
+        const controls = [...document.querySelectorAll('button, [role="button"], a')];
+        const controlText = (element) => [
+          element.innerText,
+          element.getAttribute('aria-label'),
+          element.getAttribute('title'),
+          element.getAttribute('data-testid')
+        ].filter(Boolean).join(' ').trim();
+        const isVisible = (element) => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        };
+        return {
+          url: location.href,
+          hasAccountGate: /войдите в аккаунт/i.test(bodyText)
+            && controls.some((element) => /^войти$/i.test(controlText(element))),
+          hasLeaveControl: controls.some((element) => /покинуть встречу|завершить звонок|leave call/i.test(controlText(element)))
+            || (/\/private-join\//i.test(location.pathname)
+              && !controls.some((element) => /enter-conference-button/i.test(controlText(element)))
+              && /\b\d+\b/.test(bodyText)),
+          visibleJoinControls: controls
+            .filter((element) => /enter-conference-button|подключиться|присоединиться|join meeting|join call/i.test(controlText(element)))
+            .filter(isVisible)
+            .map((element) => controlText(element)),
+          bodyText: bodyText.slice(0, 1200)
+        };
+      }));
+    } catch {}
+  }
 
-  if (state.hasAccountGate) {
+  const hasAccountGate = frameStates.some((state) => state.hasAccountGate);
+  const hasLeaveControl = frameStates.some((state) => state.hasLeaveControl);
+  const visibleJoinControls = frameStates.flatMap((state) => state.visibleJoinControls);
+
+  if (hasAccountGate) {
     await writeJoinDiagnostics('account-required');
     throw new Error(
       'Telemost требует авторизацию Яндекс ID. Авторизуйте постоянный профиль браузера в /app/data/telemost-profile.'
     );
   }
 
-  if (!state.hasLeaveControl) {
+  if (!hasLeaveControl || visibleJoinControls.length > 0) {
     await writeJoinDiagnostics('join-not-confirmed');
-    throw new Error(`Не удалось подтвердить вход во встречу. Текущий URL: ${state.url}`);
+    throw new Error(
+      `Не удалось подтвердить фактический вход во встречу. ` +
+      `leaveControl=${hasLeaveControl}; visibleJoinControls=${JSON.stringify(visibleJoinControls)}; ` +
+      `frames=${JSON.stringify(frameStates.map((state) => state.url))}`
+    );
   }
 }
 
@@ -578,24 +613,70 @@ try {
     });
   });
 
-  await page.goto(joinUrl, { waitUntil: "networkidle2", timeout: 45000 });
+  // Всегда запускаем гостевой private-join в отдельном временном профиле.
+  // Авторизованный профиль открывает оболочку Яндекс 360, где headless-вход
+  // нестабилен и ошибочно использует аккаунт владельца вместо имени бота.
+  const forceGuestJoin = process.env.TELEMOST_FORCE_GUEST !== 'false';
+  if (forceGuestJoin) {
+    const meetingId = new URL(joinUrl).pathname.split('/').filter(Boolean).pop();
+    const privateJoinUrl = new URL(`/private-join/${meetingId}`, 'https://telemost.yandex.ru');
+    privateJoinUrl.searchParams.set('call_type', 'conference');
+    privateJoinUrl.searchParams.set('lang', 'ru');
+    privateJoinUrl.searchParams.set('mic', 'on');
+    privateJoinUrl.searchParams.set('camera', 'on');
+    privateJoinUrl.searchParams.set('noise_cancellation_type', 'disabled');
+    await page.goto(privateJoinUrl.toString(), { waitUntil: 'networkidle2', timeout: 45000 });
+  } else {
+    await page.goto(joinUrl, { waitUntil: "networkidle2", timeout: 45000 });
+  }
   console.log("[recorder] Страница загружена");
 
-  // ЛОГИКА ВХОДА (улучшенная)
+  // ЛОГИКА ВХОДА (включая приватный iframe нового UI)
   await new Promise(r => setTimeout(r, 8000));
 
-  // 1. ПРОВЕРКА КНОПКИ "ПРОДОЛЖИТЬ В БРАУЗЕРЕ"
-  try {
-    const continueBtn = await page.evaluateHandle(() => {
-      const buttons = [...document.querySelectorAll("button, [role='button'], a")];
-      return buttons.find((b) => /продолжить в браузере|continue in browser/i.test(b.textContent));
-    });
-    if (continueBtn && continueBtn.asElement()) {
-      await page.evaluate((el) => el.click(), continueBtn);
-      console.log("[recorder] Нажато: Продолжить в браузере");
-      await new Promise(r => setTimeout(r, 5000));
+  async function findControl(patterns) {
+    for (const frame of page.frames()) {
+      try {
+        const handle = await frame.evaluateHandle((sources) => {
+          const regexes = sources.map((source) => new RegExp(source, 'i'));
+          return [...document.querySelectorAll("button, [role='button'], a")].find((element) => {
+            const rect = element.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0 || element.disabled) return false;
+            const text = [element.textContent, element.getAttribute('aria-label'), element.getAttribute('title'), element.getAttribute('data-testid')]
+              .filter(Boolean).join(' ');
+            return regexes.some((regex) => regex.test(text));
+          }) || null;
+        }, patterns.map((pattern) => pattern.source));
+        const element = handle.asElement();
+        if (element) return { element, frame };
+        await handle.dispose();
+      } catch {}
     }
-  } catch (e) {}
+    return null;
+  }
+
+  async function clickControl(patterns, description) {
+    const match = await findControl(patterns);
+    if (!match) return false;
+    try {
+      await match.element.click();
+    } finally {
+      await match.element.dispose();
+    }
+    console.log(`[recorder] Нажато: ${description}`);
+    return true;
+  }
+
+  // 1. ПРОВЕРКА КНОПКИ "ПРОДОЛЖИТЬ В БРАУЗЕРЕ"
+  if (await clickControl([/продолжить в браузере/i, /continue in browser/i], 'Продолжить в браузере')) {
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  // В оболочке Яндекс 360 экран звонка открывается отдельной кнопкой.
+  // Только после неё появляется официальный private-join iframe.
+  if (await clickControl([/открыть экран звонка/i, /open call screen/i, /групповой звонок/i], 'Открыть экран звонка')) {
+    await new Promise(r => setTimeout(r, 3000));
+  }
 
   // 2. Ищем поле ввода имени (старый гостевой UI Телемоста)
   const nameInput = await page.evaluateHandle(() => {
@@ -621,38 +702,87 @@ try {
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  // 3. Выключаем микрофон и камеру перед входом, поддерживая старую и новую разметку.
-  await page.evaluate(() => {
-    const buttons = [...document.querySelectorAll('button, [role="button"]')];
-    const clickByLabel = (pattern) => {
-      const button = buttons.find((element) => pattern.test(
-        `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`
-      ));
-      if (button) button.click();
-    };
+  // 3. В headless-режиме используем fake media device и оставляем микрофон/камеру
+  // доступными на prejoin: Телемост отказывается входить при отключённых устройствах.
+  // Локальный fake-поток не попадает в удалённую запись.
+  if (!isHeadless) {
+    await page.evaluate(() => {
+      const buttons = [...document.querySelectorAll('button, [role="button"]')];
+      const clickByLabel = (pattern) => {
+        const button = buttons.find((element) => pattern.test(
+          `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`
+        ));
+        if (button) button.click();
+      };
 
-    const oldMic = document.querySelector('[data-testid="turn-off-mic-button"]');
-    if (oldMic) oldMic.click();
-    else clickByLabel(/выключить микрофон|turn off microphone|mute microphone/i);
+      const oldMic = document.querySelector('[data-testid="turn-off-mic-button"]');
+      if (oldMic) oldMic.click();
+      else clickByLabel(/выключить микрофон|turn off microphone|mute microphone/i);
 
-    const oldCam = document.querySelector('[data-testid="turn-off-camera-button"]');
-    if (oldCam) oldCam.click();
-    else clickByLabel(/выключить камер|turn off camera|disable camera/i);
-  });
-
-  // 4. Кнопка входа. Не путаем её с глобальной кнопкой авторизации Яндекс 360.
-  const joinBtn = await page.evaluateHandle(() => {
-    const buttons = [...document.querySelectorAll('button, [role="button"]')];
-    return buttons.find((element) => {
-      const text = (element.innerText || element.getAttribute('aria-label') || '').trim();
-      return /^(подключиться|присоединиться|join|join meeting)$/i.test(text);
+      const oldCam = document.querySelector('[data-testid="turn-off-camera-button"]');
+      if (oldCam) oldCam.click();
+      else clickByLabel(/выключить камер|turn off camera|disable camera/i);
     });
-  });
+  }
 
-  if (joinBtn && joinBtn.asElement()) {
-    await page.evaluate((el) => el.click(), joinBtn);
-    console.log("[recorder] Кнопка входа нажата!");
-    await new Promise(r => setTimeout(r, 5000));
+  // 4. Кнопка входа может находиться в private-join iframe нового UI.
+  const joinPatterns = [
+    /enter-conference-button/i,
+    /^подключиться$/i,
+    /присоединиться/i,
+    /войти во встречу/i,
+    /join meeting/i,
+    /ask to join/i
+  ];
+  let joinClicked = await clickControl(joinPatterns, "Подключиться к встрече");
+
+  // В оболочке Яндекс 360 переход «Продолжить в браузере» иногда не открывает
+  // iframe в headless Chromium. Переходим на тот же официальный private-join
+  // endpoint напрямую вместо ложного объявления об успешном входе.
+  if (!joinClicked) {
+    const meetingId = new URL(joinUrl).pathname.split('/').filter(Boolean).pop();
+    const privateJoinUrl = new URL(`/private-join/${meetingId}`, 'https://telemost.yandex.ru');
+    privateJoinUrl.searchParams.set('call_type', 'conference');
+    privateJoinUrl.searchParams.set('lang', 'ru');
+    privateJoinUrl.searchParams.set('mic', 'on');
+    privateJoinUrl.searchParams.set('camera', 'on');
+    privateJoinUrl.searchParams.set('noise_cancellation_type', 'disabled');
+    console.log(`[recorder] Открываем прямой экран входа: ${privateJoinUrl.pathname}`);
+    await page.goto(privateJoinUrl.toString(), { waitUntil: 'networkidle2', timeout: 45000 });
+    await new Promise(r => setTimeout(r, 3000));
+
+    // При прямом гостевом входе поле имени появляется только на private-join.
+    // Заполняем его в фактическом frame после перехода, иначе Телемост оставляет
+    // форму на prejoin даже после программного клика.
+    for (const frame of page.frames()) {
+      try {
+        const input = await frame.$('input[data-testid="orb-textinput-input"], input');
+        if (!input) continue;
+        await input.click({ clickCount: 3 });
+        await input.type(BOT_NAME);
+        await input.press('Tab');
+        await input.dispose();
+        console.log(`[recorder] Имя гостя "${BOT_NAME}" установлено на private-join.`);
+        break;
+      } catch {}
+    }
+
+    // Headless Chromium может показать предупреждение об отсутствии локального
+    // микрофона поверх кнопки входа. Оно не мешает принимать удалённое аудио.
+    await clickControl([/понятно/i, /got it/i, /(?:^|\s)ok(?:\s|$)/i], "закрыть предупреждение микрофона");
+    joinClicked = await clickControl(joinPatterns, "Подключиться к встрече");
+  }
+
+  if (!joinClicked) {
+    await writeJoinDiagnostics('join-button-not-found');
+    throw new Error('Не найдена кнопка входа в Телемост, включая private-join iframe.');
+  }
+  await new Promise(r => setTimeout(r, 7000));
+
+  // Повторный клик допустим только если первый не перевёл страницу в звонок.
+  const joinStillVisible = Boolean(await findControl(joinPatterns));
+  if (joinStillVisible && await clickControl(joinPatterns, "повторное подтверждение входа")) {
+    await new Promise(r => setTimeout(r, 7000));
   }
 
   await assertMeetingJoined();
@@ -681,21 +811,48 @@ try {
 
     try {
       const count = await page.evaluate(() => {
-          const btn = document.querySelector('[data-testid="participants-button"]');
-          if (btn) {
-              const m = btn.innerText.match(/(\d+)/);
-              if (m) return parseInt(m[1]);
+          const controls = [...document.querySelectorAll('button, [role="button"], [data-testid]')];
+          const participantControl = controls.find((element) => {
+              const haystack = [
+                  element.getAttribute('data-testid'),
+                  element.getAttribute('aria-label'),
+                  element.getAttribute('title'),
+                  element.innerText,
+              ].filter(Boolean).join(' ');
+              return /participant|участник/i.test(haystack);
+          });
+          if (participantControl) {
+              const label = [
+                  participantControl.getAttribute('aria-label'),
+                  participantControl.getAttribute('title'),
+                  participantControl.innerText,
+              ].filter(Boolean).join(' ');
+              const match = label.match(/(\d+)/);
+              if (match) return parseInt(match[1], 10);
           }
-          return document.querySelectorAll('[class*="ParticipantItem"]').length || 1;
+
+          const participantNodes = document.querySelectorAll(
+              '[class*="ParticipantItem"], [data-participant-id], [data-user-id], [data-peer-id]'
+          );
+          if (participantNodes.length > 0) return participantNodes.length;
+
+          // Не подменяем неизвестное число единицей: при изменении DOM это ложно
+          // объявляло живого, но молчащего участника отсутствующим.
+          return null;
       });
 
-      if (count <= 1) {
+      if (count === 1) {
           idleSeconds += 10;
           if (idleSeconds >= MAX_IDLE_MINS * 60) {
-              console.log("[monitor] Бот один в комнате слишком долго. Выходим.");
+              console.log("[monitor] Бот достоверно один в комнате слишком долго. Выходим.");
               break;
           }
+      } else if (typeof count === 'number' && count > 1) {
+          idleSeconds = 0;
       } else {
+          // DOM Телемоста изменился или счётчик недоступен. Не завершаем запись
+          // по недостоверному fallback; остаётся общий MAX_DURATION_MINS.
+          console.log('[monitor] Число участников не определено; продолжаем запись.');
           idleSeconds = 0;
       }
       
@@ -708,9 +865,10 @@ try {
       }
       
       const isMeetingEnded = await page.evaluate(() => {
-          return document.body.innerText.includes("Встреча завершена") || 
-                 document.body.innerText.includes("Оцените качество") ||
-                 !window.location.href.includes("/j/");
+          const bodyText = document.body?.innerText || "";
+          // На private-join URL после успешного входа остаётся тем же. Считаем
+          // встречу завершённой только по явному экрану окончания, а не по /j/.
+          return /встреча завершена|оцените качество|meeting has ended|rate the call/i.test(bodyText);
       });
 
       if (isMeetingEnded) {
