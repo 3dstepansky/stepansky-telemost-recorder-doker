@@ -57,3 +57,7 @@ test('waiting room is detected but not considered joined', () => {
 test('ZoomRecorder exposes a lifecycle monitor for active recordings', () => {
   assert.equal(typeof ZoomRecorder.prototype.startMonitor, 'function');
 });
+
+test('ZoomRecorder overrides stop so it can leave the Zoom room before closing', () => {
+  assert.equal(Object.hasOwn(ZoomRecorder.prototype, 'stop'), true);
+});

@@ -515,6 +515,7 @@ async function transcribeTracks(recordingDir, options = {}) {
       usedPerTrack: false,
       reason: 'no-valid-track-files',
       diagnostics,
+      track_diagnostics: diagnostics,
     };
   }
 
@@ -559,6 +560,7 @@ async function transcribeTracks(recordingDir, options = {}) {
       usedPerTrack: false,
       reason: diagnostics.noSpeech.length > 0 ? 'no-track-speech' : 'all-track-asr-failed',
       diagnostics,
+      track_diagnostics: diagnostics,
     };
   }
 
@@ -568,6 +570,7 @@ async function transcribeTracks(recordingDir, options = {}) {
       usedPerTrack: false,
       reason: 'no-usable-track-transcript',
       diagnostics,
+      track_diagnostics: diagnostics,
     };
   }
 

@@ -211,6 +211,8 @@ test('transcribeTracks returns mixed fallback signal when all channels have no s
 
   assert.equal(result.usedPerTrack, false);
   assert.equal(result.reason, 'no-track-speech');
+  assert.equal(result.diagnostics.attempted, 1);
+  assert.equal(result.track_diagnostics.attempted, 1);
   assert.equal(result.diagnostics.noSpeech.length, 1);
   assert.equal(result.diagnostics.failures.length, 0);
 });

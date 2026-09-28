@@ -71,7 +71,7 @@ async function run() {
       for (const failure of perTrackResult.track_diagnostics.failures) {
         console.error(`[warn] Ошибка ASR трека ${failure.trackId}: ${failure.error}`);
       }
-    } else if (perTrackResult.reason === 'no-track-speech' && perTrackResult.track_diagnostics.attempted > 0) {
+    } else if (perTrackResult.reason === 'no-track-speech' && (perTrackResult.track_diagnostics?.attempted ?? perTrackResult.diagnostics?.attempted ?? 0) > 0) {
       // Валидные удалённые WebRTC-треки получены, но распознаваемой речи в них нет.
       // Не переходим на повреждённый/пустой mixed-файл и не маскируем ситуацию
       // вторичной ошибкой отсутствующего GROQ_API_KEY.

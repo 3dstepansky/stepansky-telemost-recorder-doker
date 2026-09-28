@@ -195,4 +195,32 @@ export class ZoomRecorder extends BaseMeetingRecorder {
     await this.startMonitor();
     return this;
   }
+
+  async stop() {
+    if (this.isShuttingDown) return;
+
+    if (this.page) {
+      try {
+        await this.page.evaluate(() => {
+          const candidates = [...document.querySelectorAll('button, [role="button"]')];
+          const leave = candidates.find((element) => /^(leave|покинуть)$/i.test(
+            `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`.trim()
+          ));
+          leave?.click();
+        });
+        await sleep(500);
+        await this.page.evaluate(() => {
+          const candidates = [...document.querySelectorAll('button, [role="button"]')];
+          const confirm = candidates.find((element) => /leave meeting|покинуть конференцию|покинуть встречу/i.test(
+            `${element.innerText || ''} ${element.getAttribute('aria-label') || ''}`
+          ));
+          confirm?.click();
+        });
+      } catch (error) {
+        console.warn(`[zoom] Не удалось нажать Leave перед закрытием браузера: ${error.message}`);
+      }
+    }
+
+    await super.stop();
+  }
 }
