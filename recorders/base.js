@@ -14,6 +14,20 @@ import { existsSync, mkdirSync, appendFileSync, writeFileSync, chmodSync } from 
 import { tmpdir } from 'os';
 import { parseVoiceTrigger } from '../services/voice-trigger.js';
 
+export function buildPuppeteerLaunchOptions({ isHeadless, userDataDir, args }) {
+  return {
+    headless: isHeadless ? 'new' : false,
+    args,
+    userDataDir,
+    ignoreDefaultArgs: ['--mute-audio'],
+    // The recorder owns graceful shutdown. Puppeteer's default signal
+    // handlers would close Chromium before Zoom can click Leave Meeting.
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
+  };
+}
+
 export class BaseMeetingRecorder {
   constructor(options = {}) {
     this.joinUrl = options.joinUrl;
@@ -67,12 +81,11 @@ export class BaseMeetingRecorder {
     ];
 
     console.log(`[recorder-core] Запуск браузера (${this.getPlatformName()}), headless=${this.isHeadless}...`);
-    this.browser = await puppeteer.launch({
-      headless: this.isHeadless ? 'new' : false,
+    this.browser = await puppeteer.launch(buildPuppeteerLaunchOptions({
+      isHeadless: this.isHeadless,
       args: baseArgs,
       userDataDir: this.userDataDir,
-      ignoreDefaultArgs: ['--mute-audio']
-    });
+    }));
 
     const pages = await this.browser.pages();
     this.page = pages.length > 0 ? pages[0] : await this.browser.newPage();

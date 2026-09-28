@@ -461,12 +461,12 @@ bot.action(/stop_(.+)/, async (ctx) => {
         { parse_mode: 'HTML' }
     );
 
-    // Stop the exact run.js child immediately. The lock file remains as a
-    // compatibility fallback for platform monitors and container restarts.
-    const processStopped = activeMeetingProcesses.stop(ctx.chat.id, meetingId);
+    // The platform monitor owns graceful shutdown via the lock file so Zoom
+    // can click Leave Meeting and flush recorded audio before Chromium closes.
+    const processFound = activeMeetingProcesses.stop(ctx.chat.id, meetingId);
     const lockFile = path.join(process.cwd(), `stop_${meetingId}`);
     fs.writeFileSync(lockFile, 'stop');
-    console.log(`[bot] Stop ${meetingId}: process=${processStopped ? 'signalled' : 'not-found'}, lock=${lockFile}`);
+    console.log(`[bot] Stop ${meetingId}: process=${processFound ? 'active' : 'not-found'}, lock=${lockFile}`);
 
     // Сбрасываем состояние пользователя и возвращаем в главное меню
     await saveUser(ctx.chat.id, { state: 'idle' });

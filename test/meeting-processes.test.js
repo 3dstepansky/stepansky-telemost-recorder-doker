@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MeetingProcessRegistry } from '../services/meeting-processes.js';
 
-test('stop signals the exact active run.js process and removes it', () => {
+test('stop requests graceful shutdown through the meeting lock file', () => {
   const registry = new MeetingProcessRegistry();
   const signals = [];
   const child = { kill(signal) { signals.push(signal); return true; } };
@@ -10,8 +10,8 @@ test('stop signals the exact active run.js process and removes it', () => {
   registry.register('533234854', '73369103440', child);
 
   assert.equal(registry.stop('533234854', '73369103440'), true);
-  assert.deepEqual(signals, ['SIGTERM']);
-  assert.equal(registry.stop('533234854', '73369103440'), false);
+  assert.deepEqual(signals, []);
+  assert.equal(registry.stop('533234854', '73369103440'), true);
 });
 
 test('an old child exit cannot remove a newer process for the same meeting', () => {

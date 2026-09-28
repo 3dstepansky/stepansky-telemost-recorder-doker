@@ -21,12 +21,7 @@ export class MeetingProcessRegistry {
     if (this.processes.get(key) === child) this.processes.delete(key);
   }
 
-  stop(chatId, meetingId, signal = 'SIGTERM') {
-    const key = this.key(chatId, meetingId);
-    const child = this.processes.get(key);
-    if (!child) return false;
-    this.processes.delete(key);
-    child.kill(signal);
-    return true;
+  stop(chatId, meetingId) {
+    return this.processes.has(this.key(chatId, meetingId));
   }
 }
