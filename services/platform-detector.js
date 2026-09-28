@@ -49,10 +49,13 @@ export function detectPlatform(url) {
   const zoomMatch = cleanUrl.match(/(?:https?:\/\/)?[a-zA-Z0-9.-]*zoom\.us\/(?:j|wc\/join|w)\/([0-9]+)/i);
   if (zoomMatch) {
     const meetingId = zoomMatch[1];
-    // Извлекаем пароль, если есть
+    // Извлекаем пароль непосредственно из найденной Zoom-ссылки, а не из
+    // всего Telegram-текста приглашения.
     let pwd = '';
+    const matchedZoomUrl = cleanUrl.slice(zoomMatch.index).split(/\s/)[0];
+    const absoluteZoomUrl = matchedZoomUrl.startsWith('http') ? matchedZoomUrl : `https://${matchedZoomUrl}`;
     try {
-      const parsedUrl = new URL(cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`);
+      const parsedUrl = new URL(absoluteZoomUrl);
       pwd = parsedUrl.searchParams.get('pwd') || '';
     } catch (e) {}
 

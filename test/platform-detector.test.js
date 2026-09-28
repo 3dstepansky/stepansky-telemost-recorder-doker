@@ -34,6 +34,19 @@ describe('Platform Detector Service', () => {
     assert.strictEqual(res2.normalizedUrl, 'https://zoom.us/wc/join/1234567890?pwd=secretPassword123');
   });
 
+  it('should detect Zoom URL inside a multiline invitation and preserve its password', () => {
+    const invite = `Подключиться к конференции Zoom
+https://us04web.zoom.us/j/73369103440?pwd=token123
+
+Ссылка на чат конференции
+https://us04web.zoom.us/launch/jc/73369103440`;
+    const result = detectPlatform(invite);
+    assert.strictEqual(result.valid, true);
+    assert.strictEqual(result.meetingId, '73369103440');
+    assert.strictEqual(result.pwd, 'token123');
+    assert.strictEqual(result.normalizedUrl, 'https://zoom.us/wc/join/73369103440?pwd=token123');
+  });
+
   it('should detect Microsoft Teams URLs', () => {
     const res = detectPlatform('https://teams.live.com/meet/948294829482');
     assert.strictEqual(res.valid, true);

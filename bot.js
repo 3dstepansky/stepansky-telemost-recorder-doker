@@ -10,8 +10,11 @@ import { ensureMongoIndexes, getRecentMeetingsForChat, getMeetingForChat } from 
 import { formatMeetingList } from './services/meetingList.js';
 import { escapeTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
 import { detectPlatform } from './services/platform-detector.js';
+import { MeetingProcessRegistry } from './services/meeting-processes.js';
 
 dotenv.config();
+
+const activeMeetingProcesses = new MeetingProcessRegistry();
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
     telegram: process.env.TELEGRAM_BOT_API_URL
@@ -260,18 +263,23 @@ bot.on('text', async (ctx) => {
             ])
         );
 
-        console.log(`[bot] Запуск run.js для ${detected.platform}: ${text}`);
+        console.log(`[bot] Запуск run.js для ${detected.platform}: ${detected.normalizedUrl}`);
         const env = { ...process.env, BOT_DISPLAY_NAME: botName, CHAT_ID: String(ctx.chat.id) };
         if (user.yandex_user && user.yandex_pass) {
             env.YANDEX_USER = user.yandex_user;
             env.YANDEX_WEBDAV_PASSWORD = user.yandex_pass;
         }
 
-        const child = spawn('node', ['run.js', text], { env, stdio: 'inherit' });
+        const child = spawn('node', ['run.js', detected.normalizedUrl], { env, stdio: 'inherit' });
+        activeMeetingProcesses.register(ctx.chat.id, meetingId, child);
         child.on('error', (err) => {
+            activeMeetingProcesses.unregister(ctx.chat.id, meetingId, child);
             ctx.replyWithHTML(
                 `<b>Ошибка запуска</b>\nНе удалось запустить бота для записи: <code>${String(err.message)}</code>`
             );
+        });
+        child.on('exit', () => {
+            activeMeetingProcesses.unregister(ctx.chat.id, meetingId, child);
         });
         return;
     }
@@ -453,9 +461,12 @@ bot.action(/stop_(.+)/, async (ctx) => {
         { parse_mode: 'HTML' }
     );
 
-    // Spawn stop script
+    // Stop the exact run.js child immediately. The lock file remains as a
+    // compatibility fallback for platform monitors and container restarts.
+    const processStopped = activeMeetingProcesses.stop(ctx.chat.id, meetingId);
     const lockFile = path.join(process.cwd(), `stop_${meetingId}`);
     fs.writeFileSync(lockFile, 'stop');
+    console.log(`[bot] Stop ${meetingId}: process=${processStopped ? 'signalled' : 'not-found'}, lock=${lockFile}`);
 
     // Сбрасываем состояние пользователя и возвращаем в главное меню
     await saveUser(ctx.chat.id, { state: 'idle' });
