@@ -6,6 +6,7 @@
  * sufficient proof.
  */
 
+import { existsSync, unlinkSync } from 'fs';
 import { BaseMeetingRecorder } from './base.js';
 import { detectPlatform } from '../services/platform-detector.js';
 
@@ -34,6 +35,15 @@ export function inspectZoomUiState({ url = '', bodyText = '', buttons = [], hasN
 
 export function isZoomWaitingRoom(state) {
   return /host will let you in|meeting host will let you in|waiting room|организатор.*впуст|ожидайте.*организатор/i.test(state.bodyText);
+}
+
+export function isZoomExplicitlyEnded(state) {
+  return /you have been removed|removed from the meeting|host has removed you|meeting has ended|meeting was ended|вас удалили|исключили из конференции|встреча завершена|конференция завершена/i.test(state.bodyText);
+}
+
+export function zoomStopFileName(joinUrl) {
+  const meetingId = detectPlatform(joinUrl)?.meetingId || 'meeting';
+  return `stop_${meetingId}`;
 }
 
 export function isZoomMeetingJoined(state) {
@@ -139,18 +149,24 @@ export class ZoomRecorder extends BaseMeetingRecorder {
   async startMonitor() {
     const startedAt = Date.now();
     const maxDurationMs = this.maxDurationMins * 60 * 1000;
+    const stopFile = zoomStopFileName(this.joinUrl);
     console.log(`[zoom] Монитор записи активен; максимальная длительность ${this.maxDurationMins} мин.`);
 
     while (!this.isShuttingDown && Date.now() - startedAt < maxDurationMs) {
-      await sleep(2000);
+      await sleep(1000);
       if (this.isShuttingDown) return;
+
+      if (existsSync(stopFile)) {
+        unlinkSync(stopFile);
+        console.log('[zoom] Получена команда остановки из Telegram. Покидаем встречу...');
+        await this.stop();
+        return;
+      }
 
       try {
         const state = await this.readUiState();
-        const removed = /you have been removed|removed from the meeting|host has removed you|вас удалили|исключили из конференции/i.test(state.bodyText);
-        const ended = /meeting has ended|meeting was ended|встреча завершена|конференция завершена/i.test(state.bodyText);
-        if (removed || ended || !isZoomMeetingJoined(state)) {
-          console.log(`[zoom] Встреча завершена или ассистент покинул комнату (${removed ? 'removed' : ended ? 'ended' : 'meeting-ui-missing'}).`);
+        if (isZoomExplicitlyEnded(state)) {
+          console.log('[zoom] Получен явный экран завершения или удаления из встречи.');
           await this.stop();
           return;
         }

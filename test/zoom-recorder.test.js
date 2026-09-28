@@ -5,6 +5,8 @@ import {
   inspectZoomUiState,
   isZoomMeetingJoined,
   isZoomWaitingRoom,
+  isZoomExplicitlyEnded,
+  zoomStopFileName,
   selectZoomNameInput,
 } from '../recorders/zoom.js';
 
@@ -62,6 +64,25 @@ test('waiting room is detected but not considered joined', () => {
   });
   assert.equal(isZoomWaitingRoom(state), true);
   assert.equal(isZoomMeetingJoined(state), false);
+});
+
+test('temporary missing toolbar is not an explicit meeting end', () => {
+  const state = inspectZoomUiState({
+    url: 'https://app.zoom.us/wc/123/join',
+    bodyText: 'Cannot detect your microphone',
+    buttons: [],
+    hasNameInput: false,
+  });
+  assert.equal(isZoomExplicitlyEnded(state), false);
+});
+
+test('removed-from-meeting screen is an explicit end', () => {
+  const state = inspectZoomUiState({ bodyText: 'You have been removed from the meeting' });
+  assert.equal(isZoomExplicitlyEnded(state), true);
+});
+
+test('Zoom stop-file name matches Telegram callback meeting id', () => {
+  assert.equal(zoomStopFileName('https://us04web.zoom.us/j/71281226852?pwd=secret'), 'stop_71281226852');
 });
 
 test('ZoomRecorder exposes a lifecycle monitor for active recordings', () => {
