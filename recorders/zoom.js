@@ -41,8 +41,7 @@ export function isZoomMeetingJoined(state) {
   const controls = `${state.bodyText}\n${state.buttons.join('\n')}`;
   const hasLeave = /(^|\n|\s)(leave|покинуть)(\s|$|\n)/i.test(controls);
   const hasParticipants = /participants|участники/i.test(controls);
-  const hasMeetingToolbar = /chat|react|reactions|more|чат|реакц/i.test(controls);
-  return hasLeave && hasParticipants && hasMeetingToolbar;
+  return hasLeave && hasParticipants;
 }
 
 export class ZoomRecorder extends BaseMeetingRecorder {
@@ -184,14 +183,8 @@ export class ZoomRecorder extends BaseMeetingRecorder {
 
     await this.waitForJoined();
     await this.joinComputerAudio();
-    await sleep(1500);
 
-    const verified = await this.readUiState();
-    if (!isZoomMeetingJoined(verified)) {
-      throw new Error('Zoom: экран встречи исчез после попытки подключения звука');
-    }
-
-    console.log('[zoom] ✅ Вход подтверждён по экрану встречи (Leave + Participants + toolbar). Запись активна.');
+    console.log('[zoom] ✅ Вход подтверждён по экрану встречи (Leave + Participants). Запись активна.');
     await this.startMonitor();
     return this;
   }

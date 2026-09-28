@@ -43,6 +43,16 @@ test('meeting controls and participant list confirm a joined Zoom meeting', () =
   assert.equal(isZoomMeetingJoined(state), true);
 });
 
+test('transient audio dialog still counts as joined when Leave and Participants remain', () => {
+  const state = inspectZoomUiState({
+    url: 'https://app.zoom.us/wc/123/join',
+    bodyText: 'Cannot detect your microphone Audio 2 Participants Leave',
+    buttons: ['Audio', 'Participants', 'Leave'],
+    hasNameInput: false,
+  });
+  assert.equal(isZoomMeetingJoined(state), true);
+});
+
 test('waiting room is detected but not considered joined', () => {
   const state = inspectZoomUiState({
     url: 'https://app.zoom.us/wc/123/join',

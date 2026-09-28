@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "child_process";
 import { resolve, join } from "path";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, statSync } from "fs";
 import { uploadToS3 } from "./services/s3.js";
 import dotenv from "dotenv";
 import axios from "axios";
@@ -51,6 +51,13 @@ async function main() {
         console.log(`[system] Процесс рекордера закрыт с кодом ${code}`);
         
         const hostFilePath = audioFile.replace("/app", HOST_ROOT_PATH);
+        const audioBytes = existsSync(audioFile) ? statSync(audioFile).size : 0;
+        if (code !== 0 || audioBytes < 4096) {
+            console.error(`[system] Запись аварийная или слишком короткая для обработки (recorderCode=${code}, bytes=${audioBytes}). Транскрибация пропущена.`);
+            console.log(`=== СЕССИЯ ЗАВЕРШЕНА ===`);
+            process.exit(code === 0 ? 0 : 1);
+            return;
+        }
 
         // 1. Сначала пробуем загрузить в S3 (если настроено), чтобы избежать Race Condition с удалением локального файла при транскрибации
         if (process.env.S3_BUCKET && existsSync(audioFile)) {
