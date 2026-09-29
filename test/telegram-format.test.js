@@ -37,6 +37,19 @@ test('processed meeting message removes markdown tables and boilerplate', () => 
   assert.doesNotMatch(output, /---|\| :---|<br>/);
 });
 
+test('actual LLM summary becomes native Telegram rich text', () => {
+  const summary = `Вот краткое и структурированное саммари рабочей встречи.\n\nСаммари рабочей встречи по ИИ-проектам и автоматизации\n\n💡 1. Ключевые темы\n• Найм и ресурсы: Бюджет утвержден; начинается найм.\n• ИИ-помощник продавца: Утренний бриф и аномалии.\n\n✅ 2. Принятые решения\n1. Корпоративный дайджест: Антон готовит обзор.\n📌 Фокус «Нейродиспетчера»: Использовать ИИ для простых задач.\n\n📌 3. Задачи и следующие шаги\n\n• Антон (Спикер C):\n• Стартовать найм.\n• Готовить еженедельный дайджест.\n\n• Денис:\n• Скорректировать ТЗ.\n• Провести аудит проектов.`;
+  const output = buildMeetingProcessedTelegramHtml({ title: 'Штаб_ИИ_29.09', summaryText: summary });
+
+  assert.doesNotMatch(output, /Вот краткое|Саммари рабочей встречи/);
+  assert.match(output, /💡 <b>Ключевые темы<\/b>/);
+  assert.match(output, /• <b>Найм и ресурсы:<\/b> Бюджет утвержден/);
+  assert.match(output, /✅ <b>Принятые решения<\/b>/);
+  assert.match(output, /1\. <b>Корпоративный дайджест:<\/b> Антон готовит обзор/);
+  assert.match(output, /<blockquote expandable><b>👤 Антон \(Спикер C\)<\/b>\n• Стартовать найм\.\n• Готовить еженедельный дайджест\.<\/blockquote>/);
+  assert.match(output, /<blockquote expandable><b>👤 Денис<\/b>\n• Скорректировать ТЗ\.\n• Провести аудит проектов\.<\/blockquote>/);
+});
+
 test('splitTelegramText keeps every Telegram message below the requested limit', () => {
   const input = ('Абзац с итогами встречи.\n\n').repeat(300);
   const chunks = splitTelegramText(input, 500);

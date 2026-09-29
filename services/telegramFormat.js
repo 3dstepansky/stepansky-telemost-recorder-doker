@@ -6,22 +6,51 @@ export function escapeTelegramHtml(value) {
 }
 
 function formatInlineMarkdown(value) {
-  return escapeTelegramHtml(value)
+  const escaped = escapeTelegramHtml(value)
     .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
     .replace(/__([^_\n]+)__/g, '<b>$1</b>')
     .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<i>$1</i>')
     .replace(/_([^_\n]+)_/g, '<i>$1</i>')
     .replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  const prefix = escaped.match(/^([•\-]\s+|\d+\.\s+)?([^<\n:]{2,80}:)(\s+.+)$/);
+  return prefix ? `${prefix[1] || ''}<b>${prefix[2]}</b>${prefix[3]}` : escaped;
 }
 
 function normalizeSummaryMarkdown(value) {
   const lines = String(value ?? '').replace(/\r\n/g, '\n').split('\n');
   const output = [];
 
-  for (const rawLine of lines) {
+  const isBoilerplate = (text) => {
+    const clean = text.trim();
+    return /^Вот краткое.*саммари.*встречи[.:]?$/i.test(clean)
+      || /^Саммари (?:рабочей )?встречи(?:\s+по\s+.+)?[.:]?$/i.test(clean);
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
     const line = rawLine.trimEnd();
-    if (/^Вот краткое и ёмкое саммари(?: рабочей встречи)?:?$/i.test(line.trim())) continue;
+    if (isBoilerplate(line)) continue;
     if (/^---+$/.test(line.trim())) continue;
+
+    const participant = line.trim().match(/^•\s+(.+?):$/);
+    if (participant) {
+      const tasks = [];
+      let nextIndex = index + 1;
+      while (nextIndex < lines.length) {
+        const next = lines[nextIndex].trim();
+        if (!next) break;
+        const task = next.match(/^•\s+(.+)$/);
+        if (!task || /^.+:$/.test(task[1])) break;
+        tasks.push(task[1]);
+        nextIndex += 1;
+      }
+      if (tasks.length) {
+        output.push(`@@OWNER:${participant[1]}`);
+        output.push(...tasks.map((task) => `• ${task}`), '');
+        index = nextIndex - 1;
+        continue;
+      }
+    }
 
     if (/^\s*\|/.test(line)) {
       const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
@@ -47,7 +76,7 @@ export function markdownSummaryToTelegramHtml(value) {
   const output = [];
 
   const sectionMeta = (text) => {
-    const clean = text.replace(/^\d+\.\s*/, '').replace(/:$/, '').trim();
+    const clean = text.replace(/^[^\p{L}\p{N}]*/u, '').replace(/^\d+\.\s*/, '').replace(/:$/, '').trim();
     if (/ключевые темы/i.test(clean)) return `💡 <b>${formatInlineMarkdown(clean)}</b>`;
     if (/принятые решения/i.test(clean)) return `✅ <b>${formatInlineMarkdown(clean)}</b>`;
     if (/задачи|следующие шаги/i.test(clean)) return `📌 <b>${formatInlineMarkdown(clean)}</b>`;
@@ -68,7 +97,8 @@ export function markdownSummaryToTelegramHtml(value) {
     }
 
     const heading = line.match(/^#{1,6}\s+(.+)$/);
-    const numberedCandidate = line.match(/^(\d+\.\s+.+)$/);
+    const decoratedHeading = line.match(/^[^\p{L}\p{N}]+\s*(\d+\.\s+.+)$/u);
+    const numberedCandidate = line.match(/^(\d+\.\s+.+)$/) || decoratedHeading;
     const headingText = heading?.[1] || numberedCandidate?.[1];
     const styledSection = headingText ? sectionMeta(headingText) : null;
     if (styledSection) {
