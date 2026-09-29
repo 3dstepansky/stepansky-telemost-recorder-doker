@@ -11,6 +11,7 @@ import { formatMeetingList } from './services/meetingList.js';
 import { escapeTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
 import { detectPlatform } from './services/platform-detector.js';
 import { MeetingProcessRegistry } from './services/meeting-processes.js';
+import { formatMeetingStarted, formatMeetingStopping, formatMeetingStopped } from './services/meetingMessages.js';
 
 dotenv.config();
 
@@ -257,9 +258,13 @@ bot.on('text', async (ctx) => {
         const botName = user.bot_name || 'Бот-Ассистент';
         
         await ctx.replyWithHTML(
-            `<b>Начинаем запись (${detected.icon} ${detected.displayName})</b>\n\nБот <b>${botName}</b> подключается к встрече. Вы можете остановить запись кнопкой ниже.`,
+            formatMeetingStarted({
+                icon: detected.icon,
+                displayName: detected.displayName,
+                botName,
+            }),
             Markup.inlineKeyboard([
-                Markup.button.callback('Остановить', `stop_${meetingId}`)
+                Markup.button.callback('⏹ Остановить запись', `stop_${meetingId}`)
             ])
         );
 
@@ -457,7 +462,7 @@ bot.action(/stop_(.+)/, async (ctx) => {
         ctx.chat.id,
         ctx.callbackQuery.message.message_id,
         null,
-        `<b>Завершаем запись</b>\n\nБот выходит из звонка и сохраняет файлы. Это займет несколько секунд.`,
+        formatMeetingStopping(),
         { parse_mode: 'HTML' }
     );
 
@@ -471,7 +476,7 @@ bot.action(/stop_(.+)/, async (ctx) => {
     // Сбрасываем состояние пользователя и возвращаем в главное меню
     await saveUser(ctx.chat.id, { state: 'idle' });
     await ctx.replyWithHTML(
-        `Запись остановлена пользователем. Идет фоновая обработка и транскрибация. Вы вернетесь в главное меню.`,
+        formatMeetingStopped(),
         MAIN_MENU
     );
 });
