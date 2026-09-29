@@ -29,7 +29,7 @@ function normalizeSummaryMarkdown(value) {
       if (/^Ответственный$/i.test(cells[0] || '')) continue;
       const owner = cells[0];
       const task = cells.slice(1).join(' — ').replace(/<br\s*\/?>/gi, '\n');
-      if (owner) output.push(`**${owner}**`);
+      if (owner) output.push(`@@OWNER:${owner}`);
       if (task) output.push(...task.split('\n').map((item) => item.trim()).filter(Boolean));
       output.push('');
       continue;
@@ -42,26 +42,61 @@ function normalizeSummaryMarkdown(value) {
 }
 
 export function markdownSummaryToTelegramHtml(value) {
-  return normalizeSummaryMarkdown(value).split('\n').map((line) => {
-    const heading = line.match(/^#{1,6}\s+(.+)$/);
-    if (heading) return `<b>${formatInlineMarkdown(heading[1])}</b>`;
+  const normalized = normalizeSummaryMarkdown(value);
+  const lines = normalized.split('\n');
+  const output = [];
 
-    const numberedHeading = line.match(/^(\d+\.\s+[^:]+)$/);
-    if (numberedHeading) return `<b>${formatInlineMarkdown(numberedHeading[1])}</b>`;
+  const sectionMeta = (text) => {
+    const clean = text.replace(/^\d+\.\s*/, '').replace(/:$/, '').trim();
+    if (/ключевые темы/i.test(clean)) return `💡 <b>${formatInlineMarkdown(clean)}</b>`;
+    if (/принятые решения/i.test(clean)) return `✅ <b>${formatInlineMarkdown(clean)}</b>`;
+    if (/задачи|следующие шаги/i.test(clean)) return `📌 <b>${formatInlineMarkdown(clean)}</b>`;
+    return null;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const owner = line.match(/^@@OWNER:(.+)$/);
+    if (owner) {
+      const block = [`<b>👤 ${formatInlineMarkdown(owner[1])}</b>`];
+      while (index + 1 < lines.length && lines[index + 1].trim()) {
+        const item = lines[++index].replace(/^\s*[•*-]\s*/, '');
+        block.push(`• ${formatInlineMarkdown(item)}`);
+      }
+      output.push(`<blockquote expandable>${block.join('\n')}</blockquote>`);
+      continue;
+    }
+
+    const heading = line.match(/^#{1,6}\s+(.+)$/);
+    const numberedCandidate = line.match(/^(\d+\.\s+.+)$/);
+    const headingText = heading?.[1] || numberedCandidate?.[1];
+    const styledSection = headingText ? sectionMeta(headingText) : null;
+    if (styledSection) {
+      output.push(styledSection);
+      continue;
+    }
+    if (heading) {
+      output.push(`<b>${formatInlineMarkdown(heading[1])}</b>`);
+      continue;
+    }
 
     const bullet = line.match(/^\s*[*-]\s+(.+)$/);
-    if (bullet) return `• ${formatInlineMarkdown(bullet[1])}`;
+    if (bullet) {
+      output.push(`• ${formatInlineMarkdown(bullet[1])}`);
+      continue;
+    }
+    output.push(formatInlineMarkdown(line));
+  }
 
-    return formatInlineMarkdown(line);
-  }).join('\n');
+  return output.join('\n');
 }
 
 export function buildMeetingProcessedTelegramHtml({ title, diskPath, summaryText }) {
   const diskInfo = diskPath
-    ? `\n<b>Папка на Яндекс.Диске:</b>\n<code>${escapeTelegramHtml(diskPath)}</code>\n`
+    ? `\n🗂 <b>Файлы встречи</b>\n<tg-spoiler><code>${escapeTelegramHtml(diskPath)}</code></tg-spoiler>\n`
     : '';
-  return `✅ <b>Встреча обработана</b>\n\n` +
-    `<b>Тема:</b> ${escapeTelegramHtml(title || 'Без названия')}${diskInfo}\n\n` +
+  return `✅ <b>Встреча обработана</b>\n` +
+    `<blockquote><b>${escapeTelegramHtml(title || 'Без названия')}</b></blockquote>${diskInfo}\n` +
     markdownSummaryToTelegramHtml(summaryText);
 }
 

@@ -21,11 +21,18 @@ test('markdownSummaryToTelegramHtml renders common LLM markdown for Telegram HTM
 
 test('processed meeting message removes markdown tables and boilerplate', () => {
   const summary = `Вот краткое и ёмкое саммари рабочей встречи:\n\n---\n\n1. Ключевые темы\n* Найм: Запустить подбор.\n\n3. Задачи и следующие шаги\n\n| Ответственный | Задача / Следующий шаг |\n| :--- | :--- |\n| Антон | • Запустить найм.<br>• Подготовить дайджест. |`;
-  const output = buildMeetingProcessedTelegramHtml({ title: 'Штаб_ИИ_29.09', summaryText: summary });
+  const output = buildMeetingProcessedTelegramHtml({
+    title: 'Штаб_ИИ_29.09',
+    diskPath: 'Yandex.Telemost.Records/Штаб_ИИ_29.09',
+    summaryText: summary,
+  });
 
   assert.match(output, /^✅ <b>Встреча обработана<\/b>/);
-  assert.match(output, /<b>1\. Ключевые темы<\/b>/);
-  assert.match(output, /<b>Антон<\/b>\n• Запустить найм\.\n• Подготовить дайджест\./);
+  assert.match(output, /<blockquote><b>Штаб_ИИ_29\.09<\/b><\/blockquote>/);
+  assert.match(output, /💡 <b>Ключевые темы<\/b>/);
+  assert.match(output, /📌 <b>Задачи и следующие шаги<\/b>/);
+  assert.match(output, /<blockquote expandable><b>👤 Антон<\/b>\n• Запустить найм\.\n• Подготовить дайджест\.<\/blockquote>/);
+  assert.match(output, /<tg-spoiler><code>Yandex\.Telemost\.Records\/Штаб_ИИ_29\.09<\/code><\/tg-spoiler>/);
   assert.doesNotMatch(output, /Вот краткое и ёмкое саммари/);
   assert.doesNotMatch(output, /---|\| :---|<br>/);
 });
