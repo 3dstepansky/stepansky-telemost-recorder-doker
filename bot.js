@@ -12,10 +12,12 @@ import { escapeTelegramHtml, splitTelegramText } from './services/telegramFormat
 import { detectPlatform } from './services/platform-detector.js';
 import { MeetingProcessRegistry } from './services/meeting-processes.js';
 import { formatMeetingStarted, formatMeetingStopping, formatMeetingStopped } from './services/meetingMessages.js';
+import { shouldNotifyFileProcessingError } from './services/fileProcessingStatus.js';
 
 dotenv.config();
 
 const activeMeetingProcesses = new MeetingProcessRegistry();
+let isBotShuttingDown = false;
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
     telegram: process.env.TELEGRAM_BOT_API_URL
@@ -365,10 +367,15 @@ bot.on('message', async (ctx) => {
             await saveUser(ctx.chat.id, { state: 'wait_for_media' });
             await ctx.replyWithHTML(`❌ <b>Не удалось запустить обработку файла.</b>\n<code>${String(error.message).replace(/[<>&]/g, '')}</code>`, BACK_MENU);
         });
-        child.on('exit', async (code) => {
+        child.on('exit', async (code, signal) => {
+            if (isBotShuttingDown && signal) {
+                console.log(`[file-transcribe] Обработка прервана перезапуском контейнера (${signal}); ложное сообщение об ошибке подавлено.`);
+                return;
+            }
             await saveUser(ctx.chat.id, { state: code === 0 ? 'idle' : 'wait_for_media' });
-            if (code !== 0) {
-                await ctx.replyWithHTML(`❌ <b>Обработка файла завершилась с ошибкой.</b> Попробуйте другой файл.`, BACK_MENU);
+            if (shouldNotifyFileProcessingError({ code, signal, shuttingDown: isBotShuttingDown })) {
+                console.error(`[file-transcribe] Обработка завершилась с ошибкой: code=${code}, signal=${signal || 'none'}`);
+                await ctx.replyWithHTML(`❌ <b>Не удалось обработать файл.</b>\nПовторите отправку. Если ошибка повторится, я сохраню диагностическую причину.`, BACK_MENU);
             }
         });
 
@@ -497,5 +504,11 @@ bot.action(/stop_(.+)/, async (ctx) => {
     }
 })();
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+    isBotShuttingDown = true;
+    bot.stop('SIGINT');
+});
+process.once('SIGTERM', () => {
+    isBotShuttingDown = true;
+    bot.stop('SIGTERM');
+});
