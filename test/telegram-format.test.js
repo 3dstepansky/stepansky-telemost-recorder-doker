@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from '../services/telegramFormat.js';
+import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText, buildMeetingProcessedTelegramHtml } from '../services/telegramFormat.js';
 
 test('escapeTelegramHtml escapes Telegram HTML control chars', () => {
   assert.equal(escapeTelegramHtml('A < B & C > D'), 'A &lt; B &amp; C &gt; D');
@@ -17,6 +17,17 @@ test('markdownSummaryToTelegramHtml renders common LLM markdown for Telegram HTM
   assert.match(output, /<i>Важно<\/i>/);
   assert.match(output, /&lt;не сломать HTML&gt;/);
   assert.doesNotMatch(output, /\*\*Ключевые темы:\*\*/);
+});
+
+test('processed meeting message removes markdown tables and boilerplate', () => {
+  const summary = `Вот краткое и ёмкое саммари рабочей встречи:\n\n---\n\n1. Ключевые темы\n* Найм: Запустить подбор.\n\n3. Задачи и следующие шаги\n\n| Ответственный | Задача / Следующий шаг |\n| :--- | :--- |\n| Антон | • Запустить найм.<br>• Подготовить дайджест. |`;
+  const output = buildMeetingProcessedTelegramHtml({ title: 'Штаб_ИИ_29.09', summaryText: summary });
+
+  assert.match(output, /^✅ <b>Встреча обработана<\/b>/);
+  assert.match(output, /<b>1\. Ключевые темы<\/b>/);
+  assert.match(output, /<b>Антон<\/b>\n• Запустить найм\.\n• Подготовить дайджест\./);
+  assert.doesNotMatch(output, /Вот краткое и ёмкое саммари/);
+  assert.doesNotMatch(output, /---|\| :---|<br>/);
 });
 
 test('splitTelegramText keeps every Telegram message below the requested limit', () => {

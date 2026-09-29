@@ -3,7 +3,7 @@ import path from 'path';
 import { assertNonEmptyRecording, transcribeTracks, transcribeAudioWithFallback, applyMixedTrackEventSpeakerRemap } from './services/perTrackTranscription.js';
 import { uploadToYandexDisk, renameYandexDiskFolder } from './services/webdav.js';
 import { generateFolderMeta, summarizeTranscript } from './services/summarize.js';
-import { escapeTelegramHtml, markdownSummaryToTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
+import { buildMeetingProcessedTelegramHtml, splitTelegramText } from './services/telegramFormat.js';
 import { ingestTelemostToWikiRaw } from './services/wikiIngest.js';
 import { saveMeetingResult, addResultMessageId } from './services/mongoMemory.js';
 import axios from 'axios';
@@ -261,14 +261,12 @@ async function run() {
     if (chatId && chatId !== 'unknown' && chatId !== 'manual_launch' && process.env.TELEGRAM_BOT_TOKEN) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       
-      let diskInfo = yandexUser ? `<b>Папка на Яндекс.Диске:</b>\n<code>Yandex.Telemost.Records/${escapeTelegramHtml(activeDirName)}</code>\n\n` : '';
-
-      const formattedSummary = markdownSummaryToTelegramHtml(summaryText);
-      const header = `<b>Встреча обработана!</b>\n\n` +
-                     `<b>Тема:</b> ${escapeTelegramHtml(title)}\n` +
-                     diskInfo +
-                     `<b>Сводка встречи (ИИ-саммари):</b>\n`;
-      const summaryChunks = splitTelegramText(formattedSummary, 3900 - header.length);
+      const processedMessage = buildMeetingProcessedTelegramHtml({
+        title,
+        diskPath: yandexUser ? `Yandex.Telemost.Records/${activeDirName}` : '',
+        summaryText,
+      });
+      const summaryChunks = splitTelegramText(processedMessage, 3900);
       try {
         for (let i = 0; i < summaryChunks.length; i++) {
           const replyMarkup = i === summaryChunks.length - 1 && mongoMeeting
@@ -281,7 +279,7 @@ async function run() {
             : undefined;
           const response = await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
             chat_id: chatId,
-            text: i === 0 ? header + summaryChunks[i] : `<b>Продолжение саммари:</b>\n${summaryChunks[i]}`,
+            text: i === 0 ? summaryChunks[i] : `<b>Продолжение саммари:</b>\n${summaryChunks[i]}`,
             parse_mode: 'HTML',
             reply_to_message_id: Number(sourceMessageId) || undefined,
             allow_sending_without_reply: true,
